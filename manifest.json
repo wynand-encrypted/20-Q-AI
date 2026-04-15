@@ -1,0 +1,16 @@
+{
+  "short_name": "20Q AI",
+  "name": "20Q AI Mind Reader",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2040/2040523.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./20q.html",
+  "background_color": "#000000",
+  "display": "standalone",
+  "theme_color": "#000000"
+}
+
