@@ -8,7 +8,7 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": "./20-Q.html",
+  "start_url": "./index.html",
   "background_color": "#000000",
   "display": "standalone",
   "theme_color": "#000000"
