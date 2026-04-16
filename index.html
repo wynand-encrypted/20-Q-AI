@@ -16,7 +16,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- YOUR VERIFIED API KEY ---
+        // --- YOUR VERIFIED KEY ---
         const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
         const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
         const apiKey = part1 + part2; 
@@ -30,70 +30,60 @@
             AlertTriangle: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         };
 
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
         const fetchGemini = async (history, category) => {
-            // Using the two most stable production models
-            const models = ["gemini-1.5-flash", "gemini-1.5-flash-8b"];
-            let lastError = "";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            
+            // Format history safely
+            const formattedHistory = history.map(msg => ({
+                role: msg.role === 'user' ? 'user' : 'model',
+                parts: [{ text: msg.text }]
+            }));
 
-            for (const modelName of models) {
-                // We will try each model twice, with a growing delay if servers are busy
-                for (let attempt = 1; attempt <= 2; attempt++) {
-                    try {
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-                        
-                        const payload = {
-                            contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
-                            systemInstruction: {
-                                parts: [{
-                                    text: `You are a 20 Questions AI. Category: ${category}.
-                                    RULES:
-                                    1. Ask ONLY strategic Yes/No questions.
-                                    2. If isGuess is true, 'text' MUST be ONLY the object name (e.g. 'Laptop').
-                                    3. If isGuess is false, 'text' MUST be your Yes/No question.
-                                    4. SNARK: Max 8 words in 'snark' field.
-                                    5. OUTPUT: You MUST return raw JSON. No markdown, no backticks.
-                                    {"snark": "string", "isGuess": boolean, "text": "string"}`
-                                }]
-                            },
-                            generationConfig: { responseMimeType: "application/json" }
-                        };
+            // BARE METAL PAYLOAD: No schemas, no complex configs. Just pure text instructions.
+            const payload = {
+                contents: [
+                    { 
+                        role: 'user', 
+                        parts: [{ text: `You are playing 20 Questions. The category is ${category}. You must respond ONLY with raw, valid JSON. No markdown formatting. Format exactly like this: {"snark": "witty arrogant comment", "isGuess": false, "text": "Is it electronic?"}. If you are ready to guess the object, set isGuess to true and put ONLY the name of the object in text field. ONLY ASK YES/NO QUESTIONS.` }] 
+                    },
+                    { 
+                        role: 'model', 
+                        parts: [{ text: `{"snark": "I am ready.", "isGuess": false, "text": "Understood."}` }] 
+                    },
+                    ...formattedHistory
+                ]
+            };
 
-                        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                        const data = await response.json();
-
-                        if (response.ok) {
-                            let raw = data.candidates[0].content.parts[0].text;
-                            
-                            // IRONCLAD SCRUBBER: Removes markdown blocks, finds exact JSON object
-                            raw = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-                            const jsonStart = raw.indexOf("{");
-                            const jsonEnd = raw.lastIndexOf("}") + 1;
-                            
-                            if (jsonStart === -1) throw new Error("No JSON object detected.");
-                            
-                            const json = JSON.parse(raw.substring(jsonStart, jsonEnd));
-                            
-                            // Clean double-text bugs
-                            json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
-                            return json;
-                        } else {
-                            lastError = `${response.status} - Server Busy`;
-                            if (response.status === 503 || response.status === 429) {
-                                // Wait 1.5 seconds, then 3 seconds before retrying
-                                await sleep(1500 * attempt); 
-                                continue; 
-                            }
-                            break; // If it's a 400 error, stop trying this model and move to the next
-                        }
-                    } catch (e) {
-                        lastError = "Network or parsing error.";
-                        await sleep(1500 * attempt);
-                    }
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(`API Error ${response.status}: ${data.error?.message || 'Unknown'}`);
                 }
+
+                let raw = data.candidates[0].content.parts[0].text;
+                
+                // Scrub markdown completely
+                raw = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+                const jsonStart = raw.indexOf("{");
+                const jsonEnd = raw.lastIndexOf("}") + 1;
+                
+                if (jsonStart === -1) throw new Error("AI did not return valid JSON: " + raw);
+                
+                const json = JSON.parse(raw.substring(jsonStart, jsonEnd));
+                json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
+                return json;
+
+            } catch (e) {
+                // Return exact error message to the screen
+                throw new Error(e.message);
             }
-            throw new Error(lastError); // Only throws if ALL models and ALL retries fail
         };
 
         function App() {
@@ -106,7 +96,7 @@
             const [currentText, setCurrentText] = useState("");
             const [history, setHistory] = useState([]);
             
-            // New state to prevent game loss on 503 errors
+            // Raw Error State
             const [softError, setSoftError] = useState("");
             const [pendingAction, setPendingAction] = useState(null);
 
@@ -137,15 +127,15 @@
                         }
                     }
                 } catch (e) { 
-                    // SOFT FAIL: Saves the state so the user can just click retry
-                    setSoftError("Server traffic jam! My brain needs a second.");
+                    // PRINTS EXACT ERROR TO SCREEN
+                    setSoftError(e.message);
                     setPendingAction(() => () => triggerAPI(actionType, updatedHistory, fallbackText));
                 }
                 setLoading(false);
             };
 
             const startGame = () => {
-                const init = [{ role: 'user', text: `I am thinking of a ${category}. Ask your first Yes/No question.` }];
+                const init = [{ role: 'user', text: `I have an object in mind. Ask your first question.` }];
                 setHistory(init);
                 triggerAPI('START', init, 'Start');
             };
@@ -191,7 +181,7 @@
                                     {softError ? (
                                         <div className="space-y-6">
                                             <div className="text-amber-400 flex justify-center scale-150"><Icons.AlertTriangle /></div>
-                                            <h2 className="text-xl text-zinc-400">{softError}</h2>
+                                            <h2 className="text-sm font-mono text-red-400 break-words bg-red-950/30 p-4 rounded-xl border border-red-900/50">{softError}</h2>
                                             <button onClick={pendingAction} disabled={loading} className="bg-amber-500 text-black px-12 py-4 rounded-full font-bold w-full disabled:opacity-50">
                                                 {loading ? "Reconnecting..." : "Retry Connection"}
                                             </button>
@@ -217,7 +207,7 @@
                                     ) : softError ? (
                                         <div className="flex-1 flex flex-col items-center justify-center space-y-6">
                                             <div className="text-amber-400 flex justify-center scale-125 mb-2"><Icons.AlertTriangle /></div>
-                                            <h2 className="text-xl text-center text-zinc-300">{softError}</h2>
+                                            <h2 className="text-xs font-mono text-red-400 break-words bg-red-950/30 p-4 rounded-xl border border-red-900/50 w-full text-center">{softError}</h2>
                                             <button onClick={pendingAction} disabled={loading} className="bg-zinc-800 border border-zinc-700 text-white px-8 py-4 rounded-full font-bold w-full hover:bg-zinc-700 active:scale-95 transition-all disabled:opacity-20 uppercase tracking-widest">
                                                 {loading ? "Reconnecting..." : "Try Sending Answer Again"}
                                             </button>
@@ -244,7 +234,7 @@
                                     {softError ? (
                                         <div className="space-y-6">
                                             <div className="text-amber-400 flex justify-center scale-150"><Icons.AlertTriangle /></div>
-                                            <h2 className="text-xl text-zinc-300">{softError}</h2>
+                                            <h2 className="text-xs font-mono text-red-400 break-words bg-red-950/30 p-4 rounded-xl border border-red-900/50">{softError}</h2>
                                             <button onClick={pendingAction} disabled={loading} className="bg-zinc-800 text-white px-8 py-4 rounded-full font-bold w-full disabled:opacity-20 uppercase">
                                                 {loading ? "Reconnecting..." : "Send Response Again"}
                                             </button>
