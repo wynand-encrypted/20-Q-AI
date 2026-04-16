@@ -35,8 +35,8 @@
         };
 
         const fetchGemini = async (history) => {
-            // Pointing to the specific model allowed for your account
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            // Switched to the Lite model for better API speed limits!
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
             const payload = {
                 contents: history.map(msg => ({
                     role: msg.role,
@@ -114,10 +114,13 @@ Rules:
                     setHistory([...initialHistory, { role: 'model', text: aiResponse.raw }]);
                     setCurrentSnark(aiResponse.parsed.snark);
                     setCurrentText(aiResponse.parsed.text);
+                    // Artificial pacing for the start screen
+                    setTimeout(() => setLoading(false), 2000); 
                 } catch (e) {
                     setGameState('ERROR');
                     setErrorMessage(e.message);
-                } finally { setLoading(false); }
+                    setLoading(false);
+                }
             };
 
             const handleAnswer = async (answerText) => {
@@ -134,19 +137,27 @@ Rules:
                     setHistory([...updatedHistory, { role: 'model', text: aiResponse.raw }]);
                     setCurrentSnark(aiResponse.parsed.snark);
                     setCurrentText(aiResponse.parsed.text);
-                    if (aiResponse.parsed.isGuess) {
-                        setGameState('GUESSING');
-                    } else {
-                        setQCount(nextQCount);
-                        if (nextQCount % 4 === 0 && nextQCount < 20) {
-                            setShowTaunt(true);
-                            setTimeout(() => { setShowTaunt(false); }, 5000);
+                    
+                    // The Pro Developer Pacing Fix!
+                    // This forces a 4-second "Thinking" delay to completely prevent API rate limits
+                    setTimeout(() => {
+                        if (aiResponse.parsed.isGuess) {
+                            setGameState('GUESSING');
+                        } else {
+                            setQCount(nextQCount);
+                            if (nextQCount % 4 === 0 && nextQCount < 20) {
+                                setShowTaunt(true);
+                                setTimeout(() => { setShowTaunt(false); }, 4000);
+                            }
                         }
-                    }
+                        setLoading(false);
+                    }, 4000);
+
                 } catch (e) {
                     setGameState('ERROR');
                     setErrorMessage(e.message);
-                } finally { setLoading(false); }
+                    setLoading(false);
+                }
             };
 
             const handleGuessResponse = async (isCorrect) => {
@@ -214,17 +225,17 @@ Rules:
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 mt-10">
-                                                <button disabled={loading} onClick={() => handleAnswer('Yes')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-cyan-500 text-cyan-400 active:bg-cyan-900/20">
-                                                    <Icons.Zap /><span className="mt-2 font-bold text-white">Yes</span>
+                                                <button disabled={loading} onClick={() => handleAnswer('Yes')} className={`flex flex-col items-center justify-center py-5 rounded-2xl border ${loading ? 'border-zinc-800 text-zinc-600' : 'border-cyan-500 text-cyan-400 active:bg-cyan-900/20'}`}>
+                                                    <Icons.Zap /><span className={`mt-2 font-bold ${loading ? 'text-zinc-600' : 'text-white'}`}>Yes</span>
                                                 </button>
-                                                <button disabled={loading} onClick={() => handleAnswer('No')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-magenta-500 text-pink-500 active:bg-pink-900/20">
-                                                    <Icons.XOctagon /><span className="mt-2 font-bold text-white">No</span>
+                                                <button disabled={loading} onClick={() => handleAnswer('No')} className={`flex flex-col items-center justify-center py-5 rounded-2xl border ${loading ? 'border-zinc-800 text-zinc-600' : 'border-magenta-500 text-pink-500 active:bg-pink-900/20'}`}>
+                                                    <Icons.XOctagon /><span className={`mt-2 font-bold ${loading ? 'text-zinc-600' : 'text-white'}`}>No</span>
                                                 </button>
-                                                <button disabled={loading} onClick={() => handleAnswer('Sometimes')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-amber-400 text-amber-400 active:bg-amber-900/20">
-                                                    <Icons.Radio /><span className="mt-2 font-bold text-white">Sometimes</span>
+                                                <button disabled={loading} onClick={() => handleAnswer('Sometimes')} className={`flex flex-col items-center justify-center py-5 rounded-2xl border ${loading ? 'border-zinc-800 text-zinc-600' : 'border-amber-400 text-amber-400 active:bg-amber-900/20'}`}>
+                                                    <Icons.Radio /><span className={`mt-2 font-bold ${loading ? 'text-zinc-600' : 'text-white'}`}>Sometimes</span>
                                                 </button>
-                                                <button disabled={loading} onClick={() => handleAnswer('Unknown')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-zinc-700 text-zinc-400 active:bg-zinc-800">
-                                                    <Icons.ShieldAlert /><span className="mt-2 font-bold text-white">Unknown</span>
+                                                <button disabled={loading} onClick={() => handleAnswer('Unknown')} className={`flex flex-col items-center justify-center py-5 rounded-2xl border ${loading ? 'border-zinc-800 text-zinc-600' : 'border-zinc-700 text-zinc-400 active:bg-zinc-800'}`}>
+                                                    <Icons.ShieldAlert /><span className={`mt-2 font-bold ${loading ? 'text-zinc-600' : 'text-white'}`}>Unknown</span>
                                                 </button>
                                             </div>
                                         </>
