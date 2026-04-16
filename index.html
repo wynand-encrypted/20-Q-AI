@@ -3,33 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>20Q AI PRO</title>
+    <title>20Q AI</title>
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { background-color: black; color: white; margin: 0; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
-        .glass { background: rgba(15, 15, 15, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        body { background-color: black; color: white; margin: 0; overflow-x: hidden; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
+        // --- USING YOUR PRO ACCOUNT KEY ---
         const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
         const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
         const apiKey = part1 + part2; 
 
-        const { useState } = React;
+        const { useState, useEffect } = React;
 
-        const fetchGemini = async (history) => {
+        const Icons = {
+            Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>,
+            Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>,
+            XOctagon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
+            Radio: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>,
+            ShieldAlert: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>,
+            RotateCcw: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>,
+            AlertTriangle: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        };
+
+        const fetchGemini = async (history, retries = 2) => {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
                 systemInstruction: {
                     parts: [{
-                        text: "You are a 20 Questions AI. Be snarky but use simple English. Ask ONE yes/no question. If you are 95% sure, set isGuess to true and provide the object name."
+                        text: `You are the '20Q' AI. Guess the object in 20 questions.
+                        1. Ask ONE Yes/No question at a time.
+                        2. Personality: Arrogant, used simple everyday English.
+                        3. Provide a short 'snark' comment (4-8 words).
+                        4. When 95% certain, set 'isGuess' to true and give object name in 'text'.`
                     }]
                 },
                 generationConfig: {
@@ -42,88 +57,165 @@
                 }
             };
             
-            const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const data = await response.json();
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            return JSON.parse(responseText);
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (response.ok) {
+                        const data = await response.json();
+                        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                        return { raw: responseText, parsed: JSON.parse(responseText) };
+                    }
+                    if (response.status === 503 || response.status === 429) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                    }
+                } catch (e) { if (i === retries - 1) throw e; }
+            }
         };
 
         function App() {
             const [gameState, setGameState] = useState('START');
+            const [history, setHistory] = useState([]);
             const [qCount, setQCount] = useState(0);
             const [loading, setLoading] = useState(false);
+            const [showTaunt, setShowTaunt] = useState(false);
             const [currentSnark, setCurrentSnark] = useState("");
             const [currentText, setCurrentText] = useState("");
-            const [history, setHistory] = useState([]);
+            const [errorMessage, setErrorMessage] = useState("");
 
             const startGame = async () => {
-                setLoading(true); setGameState('PLAYING'); setQCount(1);
-                const initial = [{ role: 'user', text: "Start game." }];
-                const res = await fetchGemini(initial);
-                setHistory([...initial, { role: 'model', text: JSON.stringify(res) }]);
-                setCurrentSnark(res.snark); setCurrentText(res.text);
-                setLoading(false);
+                setGameState('PLAYING');
+                setQCount(1);
+                setLoading(true);
+                setShowTaunt(false);
+                setCurrentSnark("Connecting...");
+                setCurrentText("");
+                const initialHistory = [{ role: 'user', text: "Start the game." }];
+                setHistory(initialHistory);
+                try {
+                    const aiResponse = await fetchGemini(initialHistory);
+                    setHistory([...initialHistory, { role: 'model', text: aiResponse.raw }]);
+                    setCurrentSnark(aiResponse.parsed.snark);
+                    setCurrentText(aiResponse.parsed.text);
+                } catch (e) {
+                    setGameState('ERROR'); setErrorMessage(e.message);
+                } finally { setLoading(false); }
             };
 
-            const handleAnswer = async (ans) => {
+            const handleAnswer = async (answerText) => {
                 setLoading(true);
-                const updated = [...history, { role: 'user', text: ans }];
-                const res = await fetchGemini(updated);
-                setHistory([...updated, { role: 'model', text: JSON.stringify(res) }]);
-                setCurrentSnark(res.snark); setCurrentText(res.text);
-                if (res.isGuess) setGameState('GUESSING'); else setQCount(qCount + 1);
-                setLoading(false);
+                let nextQCount = qCount + 1;
+                const updatedHistory = [...history, { role: 'user', text: answerText }];
+                setHistory(updatedHistory);
+                try {
+                    const aiResponse = await fetchGemini(updatedHistory);
+                    setHistory([...updatedHistory, { role: 'model', text: aiResponse.raw }]);
+                    setCurrentSnark(aiResponse.parsed.snark);
+                    setCurrentText(aiResponse.parsed.text);
+                    
+                    if (aiResponse.parsed.isGuess) {
+                        setGameState('GUESSING');
+                    } else {
+                        setQCount(nextQCount);
+                        // Original taunt logic (every 4 questions)
+                        if (nextQCount % 4 === 0) {
+                            setShowTaunt(true);
+                            setTimeout(() => { setShowTaunt(false); }, 3500);
+                        }
+                    }
+                } catch (e) {
+                    setGameState('ERROR'); setErrorMessage(e.message);
+                } finally { setLoading(false); }
+            };
+
+            const handleGuessResponse = (isCorrect) => {
+                if (isCorrect) setGameState('WON');
+                else qCount >= 20 ? setGameState('LOST') : (setGameState('PLAYING'), handleAnswer("No, that was a wrong guess. Keep asking."));
             };
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-4 font-sans">
-                    <div className="w-full max-w-md glass rounded-[2.5rem] p-8 space-y-8 text-center shadow-2xl">
-                        {gameState === 'START' && (
-                            <div className="space-y-6">
-                                <div className="w-20 h-20 bg-cyan-500 rounded-3xl mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.5)]">
-                                    <svg className="w-10 h-10 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                </div>
-                                <h1 className="text-4xl font-black tracking-tighter">20Q <span className="text-cyan-400">ULTRA</span></h1>
-                                <p className="text-zinc-500 font-medium">Think of an object. My neural link is now at 100% capacity.</p>
-                                <button onClick={startGame} className="w-full bg-white text-black py-5 rounded-2xl font-bold text-xl active:scale-95 transition-transform">START NEURAL LINK</button>
+                <div className="min-h-screen bg-black text-zinc-100 font-sans flex flex-col items-center justify-center p-4">
+                    <div className="w-full max-w-lg mx-auto bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden flex flex-col min-h-[550px] relative shadow-[0_0_15px_rgba(34,211,238,0.1)]">
+                        <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center">
+                            <div className="flex items-center space-x-2.5">
+                                <span className="text-amber-400"><Icons.Cpu /></span>
+                                <span className="font-extrabold text-lg text-white">20Q <span className="text-cyan-400">AI</span></span>
                             </div>
-                        )}
+                            {gameState !== 'START' && gameState !== 'ERROR' && (
+                                <div className="flex items-center space-x-2 px-3 py-1 bg-zinc-900/50 rounded-full font-mono text-sm">
+                                    <span className="text-zinc-300">QUESTION:</span>
+                                    <span className="text-cyan-300 font-bold">{Math.min(qCount, 20)}</span>
+                                    <span className="text-zinc-500">/20</span>
+                                </div>
+                            )}
+                        </div>
 
-                        {gameState === 'PLAYING' && (
-                            <div className="space-y-8 animate-in fade-in zoom-in duration-300">
-                                <div className="flex justify-between items-center text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                                    <span>Question {qCount}/20</span>
-                                    <span className="text-cyan-400">Paid Tier Active</span>
+                        <div className="flex-1 flex flex-col p-8 justify-center relative">
+                            {gameState === 'START' && (
+                                <div className="text-center space-y-10">
+                                    <h1 className="text-4xl font-extralight text-white">I will read your mind.</h1>
+                                    <p className="text-zinc-400 max-w-sm mx-auto">Think of an object. Animal, vegetable, or mineral. I will guess it in 20 questions or less.</p>
+                                    <button onClick={startGame} className="inline-flex items-center space-x-3 bg-zinc-50 text-black px-10 py-4 rounded-full font-bold mx-auto">
+                                        <Icons.Zap /> <span>Start Game</span>
+                                    </button>
                                 </div>
-                                <div className="min-h-[120px] flex items-center justify-center">
-                                    {loading ? <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div> : <h2 className="text-2xl font-bold leading-tight">{currentText}</h2>}
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {['Yes', 'No', 'Maybe', 'IDK'].map(b => (
-                                        <button key={b} disabled={loading} onClick={() => handleAnswer(b)} className="py-4 glass rounded-2xl font-bold hover:bg-white hover:text-black transition-all disabled:opacity-30">{b}</button>
-                                    ))}
-                                </div>
-                                {!loading && <p className="text-cyan-500 italic text-sm">"{currentSnark}"</p>}
-                            </div>
-                        )}
+                            )}
 
-                        {gameState === 'GUESSING' && (
-                            <div className="space-y-8">
-                                <h2 className="text-zinc-500 italic">"{currentSnark}"</h2>
-                                <h1 className="text-4xl font-black">IS IT A <span className="text-cyan-400">{currentText.toUpperCase()}</span>?</h1>
-                                <div className="space-y-3">
-                                    <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-2xl font-bold text-xl">YES, YOU GOT IT!</button>
-                                    <button onClick={() => setGameState('PLAYING')} className="w-full glass py-4 rounded-2xl font-bold text-zinc-400">NO, KEEP GOING</button>
+                            {gameState === 'PLAYING' && (
+                                <div className="flex flex-col h-full justify-between">
+                                    {showTaunt ? (
+                                        <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-pulse">
+                                            <div className="text-purple-500 scale-150 mb-4"><Icons.Cpu /></div>
+                                            <h2 className="text-3xl font-extrabold text-center text-purple-400 italic">"{currentSnark}"</h2>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-6 flex-1 flex flex-col justify-center">
+                                                <div className="min-h-[140px] flex items-center justify-center bg-zinc-900 rounded-3xl p-6 border border-zinc-800">
+                                                    {loading ? <p className="text-cyan-400 animate-pulse text-2xl">Thinking...</p> : <h2 className="text-3xl font-semibold text-center text-white">{currentText}</h2>}
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 mt-10">
+                                                {['Yes', 'No', 'Sometimes', 'Unknown'].map(ans => (
+                                                    <button key={ans} disabled={loading} onClick={() => handleAnswer(ans)} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-zinc-800 hover:border-cyan-500 text-zinc-400 hover:text-white active:bg-cyan-900/20 transition-all font-bold">
+                                                        {ans}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {(gameState === 'WON' || qCount > 20) && (
-                            <div className="space-y-6">
-                                <h1 className="text-6xl font-black">{gameState === 'WON' ? 'I WIN.' : 'YOU WIN.'}</h1>
-                                <button onClick={() => window.location.reload()} className="w-full glass py-4 rounded-2xl font-bold">REBOOT SYSTEM</button>
-                            </div>
-                        )}
+                            {gameState === 'GUESSING' && (
+                                <div className="flex flex-col h-full justify-center text-center space-y-10">
+                                    <p className="text-amber-300 italic font-bold">"{currentSnark}"</p>
+                                    <h2 className="text-4xl font-extrabold text-white">Is it a <span className="text-cyan-400 underline">{currentText.toUpperCase()}</span>?</h2>
+                                    <div className="flex flex-col space-y-4">
+                                        <button onClick={() => handleGuessResponse(true)} className="px-8 py-5 bg-cyan-500 text-black rounded-full font-bold text-lg shadow-lg shadow-cyan-500/20">YES! YOU GOT IT</button>
+                                        <button onClick={() => handleGuessResponse(false)} className="px-8 py-4 border border-zinc-700 rounded-full text-zinc-400">NO, WRONG</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(gameState === 'WON' || gameState === 'LOST') && (
+                                <div className="text-center space-y-10">
+                                    <h1 className="text-6xl font-black text-white">{gameState === 'WON' ? 'I WIN.' : 'YOU WIN.'}</h1>
+                                    <p className="text-zinc-500">{gameState === 'WON' ? `Found in ${qCount} questions.` : 'Impossible.'}</p>
+                                    <button onClick={() => window.location.reload()} className="inline-flex items-center space-x-2 px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-full mx-auto font-bold">
+                                        <Icons.RotateCcw /> <span>Restart</span>
+                                    </button>
+                                </div>
+                            )}
+
+                            {gameState === 'ERROR' && (
+                                <div className="text-center space-y-6">
+                                    <h1 className="text-3xl font-semibold text-red-500">Connection Failed</h1>
+                                    <p className="text-zinc-400 text-xs font-mono bg-zinc-900 p-2 rounded">{errorMessage}</p>
+                                    <button onClick={() => window.location.reload()} className="px-6 py-3 border border-zinc-700 rounded-full">Try Again</button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             );
