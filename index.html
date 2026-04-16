@@ -17,7 +17,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- USING YOUR PRO ACCOUNT KEY ---
+        // --- USING YOUR PAID TIER KEY ---
         const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
         const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
         const apiKey = part1 + part2; 
@@ -34,17 +34,18 @@
             AlertTriangle: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         };
 
-        const fetchGemini = async (history, retries = 2) => {
+        const fetchGemini = async (history) => {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
                 systemInstruction: {
                     parts: [{
-                        text: `You are the '20Q' AI. Guess the object in 20 questions.
-                        1. Ask ONE Yes/No question at a time.
-                        2. Personality: Arrogant, used simple everyday English.
-                        3. Provide a short 'snark' comment (4-8 words).
-                        4. When 95% certain, set 'isGuess' to true and give object name in 'text'.`
+                        text: `You are the '20Q' AI. You are a mind-reading game engine.
+                        Rules:
+                        1. Ask only ONE specific Yes/No question at a time.
+                        2. Personality: Arrogant mind-reader. Use simple English.
+                        3. Provide a short 'snark' comment (max 8 words).
+                        4. For the 'text' field: If isGuess is true, ONLY provide the name of the object (e.g., 'Cat'). If isGuess is false, provide your question.`
                     }]
                 },
                 generationConfig: {
@@ -56,21 +57,10 @@
                     }
                 }
             };
-            
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (response.ok) {
-                        const data = await response.json();
-                        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                        return { raw: responseText, parsed: JSON.parse(responseText) };
-                    }
-                    if (response.status === 503 || response.status === 429) {
-                        await new Promise(r => setTimeout(r, 2000));
-                        continue;
-                    }
-                } catch (e) { if (i === retries - 1) throw e; }
-            }
+            const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await response.json();
+            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            return { raw: responseText, parsed: JSON.parse(responseText) };
         };
 
         function App() {
@@ -84,53 +74,37 @@
             const [errorMessage, setErrorMessage] = useState("");
 
             const startGame = async () => {
-                setGameState('PLAYING');
-                setQCount(1);
-                setLoading(true);
-                setShowTaunt(false);
-                setCurrentSnark("Connecting...");
-                setCurrentText("");
-                const initialHistory = [{ role: 'user', text: "Start the game." }];
-                setHistory(initialHistory);
+                setGameState('PLAYING'); setQCount(1); setLoading(true); setShowTaunt(false);
+                const initial = [{ role: 'user', text: "Start game." }];
+                setHistory(initial);
                 try {
-                    const aiResponse = await fetchGemini(initialHistory);
-                    setHistory([...initialHistory, { role: 'model', text: aiResponse.raw }]);
-                    setCurrentSnark(aiResponse.parsed.snark);
-                    setCurrentText(aiResponse.parsed.text);
-                } catch (e) {
-                    setGameState('ERROR'); setErrorMessage(e.message);
-                } finally { setLoading(false); }
+                    const res = await fetchGemini(initial);
+                    setHistory([...initial, { role: 'model', text: res.raw }]);
+                    setCurrentSnark(res.parsed.snark); setCurrentText(res.parsed.text);
+                } catch (e) { setGameState('ERROR'); setErrorMessage(e.message); }
+                finally { setLoading(false); }
             };
 
-            const handleAnswer = async (answerText) => {
+            const handleAnswer = async (ans) => {
                 setLoading(true);
-                let nextQCount = qCount + 1;
-                const updatedHistory = [...history, { role: 'user', text: answerText }];
-                setHistory(updatedHistory);
+                let nextCount = qCount + 1;
+                const updated = [...history, { role: 'user', text: ans }];
+                setHistory(updated);
                 try {
-                    const aiResponse = await fetchGemini(updatedHistory);
-                    setHistory([...updatedHistory, { role: 'model', text: aiResponse.raw }]);
-                    setCurrentSnark(aiResponse.parsed.snark);
-                    setCurrentText(aiResponse.parsed.text);
-                    
-                    if (aiResponse.parsed.isGuess) {
+                    const res = await fetchGemini(updated);
+                    setHistory([...updated, { role: 'model', text: res.raw }]);
+                    setCurrentSnark(res.parsed.snark); setCurrentText(res.parsed.text);
+                    if (res.parsed.isGuess) {
                         setGameState('GUESSING');
                     } else {
-                        setQCount(nextQCount);
-                        // Original taunt logic (every 4 questions)
-                        if (nextQCount % 4 === 0) {
+                        setQCount(nextCount);
+                        if (nextCount % 4 === 0) {
                             setShowTaunt(true);
-                            setTimeout(() => { setShowTaunt(false); }, 3500);
+                            setTimeout(() => setShowTaunt(false), 3500);
                         }
                     }
-                } catch (e) {
-                    setGameState('ERROR'); setErrorMessage(e.message);
-                } finally { setLoading(false); }
-            };
-
-            const handleGuessResponse = (isCorrect) => {
-                if (isCorrect) setGameState('WON');
-                else qCount >= 20 ? setGameState('LOST') : (setGameState('PLAYING'), handleAnswer("No, that was a wrong guess. Keep asking."));
+                } catch (e) { setGameState('ERROR'); setErrorMessage(e.message); }
+                finally { setLoading(false); }
             };
 
             return (
@@ -141,7 +115,7 @@
                                 <span className="text-amber-400"><Icons.Cpu /></span>
                                 <span className="font-extrabold text-lg text-white">20Q <span className="text-cyan-400">AI</span></span>
                             </div>
-                            {gameState !== 'START' && gameState !== 'ERROR' && (
+                            {gameState !== 'START' && (
                                 <div className="flex items-center space-x-2 px-3 py-1 bg-zinc-900/50 rounded-full font-mono text-sm">
                                     <span className="text-zinc-300">QUESTION:</span>
                                     <span className="text-cyan-300 font-bold">{Math.min(qCount, 20)}</span>
@@ -176,11 +150,10 @@
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 mt-10">
-                                                {['Yes', 'No', 'Sometimes', 'Unknown'].map(ans => (
-                                                    <button key={ans} disabled={loading} onClick={() => handleAnswer(ans)} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-zinc-800 hover:border-cyan-500 text-zinc-400 hover:text-white active:bg-cyan-900/20 transition-all font-bold">
-                                                        {ans}
-                                                    </button>
-                                                ))}
+                                                <button disabled={loading} onClick={() => handleAnswer('Yes')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-cyan-500 text-cyan-400 active:bg-cyan-900/20 font-bold"><Icons.Zap /><span className="mt-2 text-white">Yes</span></button>
+                                                <button disabled={loading} onClick={() => handleAnswer('No')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-magenta-500 text-pink-500 active:bg-pink-900/20 font-bold"><Icons.XOctagon /><span className="mt-2 text-white">No</span></button>
+                                                <button disabled={loading} onClick={() => handleAnswer('Sometimes')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-amber-400 text-amber-400 active:bg-amber-900/20 font-bold"><Icons.Radio /><span className="mt-2 text-white">Sometimes</span></button>
+                                                <button disabled={loading} onClick={() => handleAnswer('Unknown')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-zinc-700 text-zinc-400 active:bg-zinc-800 font-bold"><Icons.ShieldAlert /><span className="mt-2 text-white">Unknown</span></button>
                                             </div>
                                         </>
                                     )}
@@ -192,27 +165,16 @@
                                     <p className="text-amber-300 italic font-bold">"{currentSnark}"</p>
                                     <h2 className="text-4xl font-extrabold text-white">Is it a <span className="text-cyan-400 underline">{currentText.toUpperCase()}</span>?</h2>
                                     <div className="flex flex-col space-y-4">
-                                        <button onClick={() => handleGuessResponse(true)} className="px-8 py-5 bg-cyan-500 text-black rounded-full font-bold text-lg shadow-lg shadow-cyan-500/20">YES! YOU GOT IT</button>
-                                        <button onClick={() => handleGuessResponse(false)} className="px-8 py-4 border border-zinc-700 rounded-full text-zinc-400">NO, WRONG</button>
+                                        <button onClick={() => setGameState('WON')} className="px-8 py-5 bg-cyan-500 text-black rounded-full font-bold text-lg">YES, YOU GOT IT!</button>
+                                        <button onClick={() => { setGameState('PLAYING'); handleAnswer("No, keep going."); }} className="px-8 py-4 border border-zinc-700 rounded-full text-zinc-400 font-bold">NO, WRONG</button>
                                     </div>
                                 </div>
                             )}
 
-                            {(gameState === 'WON' || gameState === 'LOST') && (
+                            {gameState === 'WON' && (
                                 <div className="text-center space-y-10">
-                                    <h1 className="text-6xl font-black text-white">{gameState === 'WON' ? 'I WIN.' : 'YOU WIN.'}</h1>
-                                    <p className="text-zinc-500">{gameState === 'WON' ? `Found in ${qCount} questions.` : 'Impossible.'}</p>
-                                    <button onClick={() => window.location.reload()} className="inline-flex items-center space-x-2 px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-full mx-auto font-bold">
-                                        <Icons.RotateCcw /> <span>Restart</span>
-                                    </button>
-                                </div>
-                            )}
-
-                            {gameState === 'ERROR' && (
-                                <div className="text-center space-y-6">
-                                    <h1 className="text-3xl font-semibold text-red-500">Connection Failed</h1>
-                                    <p className="text-zinc-400 text-xs font-mono bg-zinc-900 p-2 rounded">{errorMessage}</p>
-                                    <button onClick={() => window.location.reload()} className="px-6 py-3 border border-zinc-700 rounded-full">Try Again</button>
+                                    <h1 className="text-6xl font-black text-white">I WIN.</h1>
+                                    <button onClick={() => window.location.reload()} className="inline-flex items-center space-x-2 px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-full font-bold mx-auto"><Icons.RotateCcw /> <span>Restart</span></button>
                                 </div>
                             )}
                         </div>
