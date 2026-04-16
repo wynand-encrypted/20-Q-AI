@@ -16,7 +16,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- YOUR VERIFIED KEY ---
+        // --- YOUR VERIFIED PAID TIER KEY ---
         const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
         const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
         const apiKey = part1 + part2; 
@@ -30,23 +30,21 @@
         };
 
         const fetchGemini = async (history, category) => {
-            // DUAL-MODEL FAILOVER LOGIC
-            const models = ["gemini-1.5-pro", "gemini-1.5-flash"];
+            // DUAL-BRAIN SETUP: Try the newest 2026 model first, fall back to stable 2.5
+            const models = ["gemini-3-flash", "gemini-2.5-flash"];
             let lastError = "";
 
             for (const modelName of models) {
                 try {
-                    // CRITICAL: Using v1beta to ensure systemInstruction and responseSchema work!
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
                     
                     const payload = {
                         contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
                         systemInstruction: {
                             parts: [{
-                                text: `You are the world's most arrogant 20 Questions AI. Category chosen: ${category}.
-                                
+                                text: `You are the world's most arrogant 20 Questions AI. Category: ${category}.
                                 RULES:
-                                1. Ask ONLY strategic Yes/No questions. Never ask "Is it X or Y?".
+                                1. Ask ONLY strategic Yes/No questions. Never ask "Is it A or B?".
                                 2. If isGuess is true, 'text' MUST be ONLY the object name (e.g. 'Laptop').
                                 3. If isGuess is false, 'text' MUST be your Yes/No question.
                                 4. SNARK: Max 8 words in 'snark' field.
@@ -72,7 +70,7 @@
                         const jsonEnd = raw.lastIndexOf("}") + 1;
                         const json = JSON.parse(raw.substring(jsonStart, jsonEnd));
                         
-                        // Fix double-text bug
+                        // Clean double-text prefix bug
                         json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
                         return json;
                     } else {
@@ -152,7 +150,7 @@
                             )}
                         </div>
 
-                        <div className="flex-1 flex flex-col p-8 justify-center relative">
+                        <div className="flex-1 flex flex-col p-8 justify-center relative shadow-inner">
                             {gameState === 'START' && (
                                 <div className="text-center space-y-8 animate-in fade-in duration-500">
                                     <h1 className="text-3xl font-extralight text-white leading-tight uppercase tracking-tighter">Choose a Category</h1>
