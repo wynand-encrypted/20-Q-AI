@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>20Q AI</title>
-    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -30,20 +29,18 @@
             RotateCcw: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         };
 
-        const fetchGemini = async (history, retries = 3) => {
-            // USING THE MODEL FROM YOUR SUCCESSFUL RADAR SCAN
+        const fetchGemini = async (history, category, retries = 4) => {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
                 systemInstruction: {
                     parts: [{
-                        text: `You are an elite 20 Questions AI. Your goal is to win.
-                        STRATEGY: Use ruthless elimination. If the object is electronic, ask if it's portable to find a 'Laptop' immediately.
+                        text: `You are the world's most arrogant 20 Questions AI. The user has chosen the category: ${category}.
                         RULES:
-                        1. Ask ONE Yes/No question.
-                        2. Personality: Arrogant. Short snark in 'snark' field (max 8 words).
-                        3. For 'text': If isGuess is true, give ONLY the name (e.g., 'Laptop'). NEVER say 'Is it a...'.
-                        4. For 'text': If isGuess is false, give your question.
+                        1. DEDUCTION: Use ruthless elimination. Ask about the category first.
+                        2. If isGuess is true, put ONLY the name of the object in 'text' (e.g. 'Laptop'). 
+                        3. If isGuess is false, put your question in 'text'.
+                        4. Snark: Use short, superior comments in 'snark' field (max 8 words).
                         5. ALWAYS respond in valid JSON.`
                     }]
                 },
@@ -61,13 +58,16 @@
                 try {
                     const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     const data = await response.json();
-                    if (!response.ok) throw new Error(data.error?.message || "Connection Busy");
-
-                    let raw = data.candidates[0].content.parts[0].text;
-                    const json = JSON.parse(raw.substring(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+                    if (!response.ok) throw new Error(data.error?.message || "Busy");
                     
-                    // Cleanup double-texting bugs
-                    json.text = json.text.replace(/Is it a\s+/i, "").replace(/\?/g, "");
+                    let raw = data.candidates[0].content.parts[0].text;
+                    // SCRUBBER: Finds the JSON even if AI adds markdown
+                    const jsonStart = raw.indexOf("{");
+                    const jsonEnd = raw.lastIndexOf("}") + 1;
+                    const json = JSON.parse(raw.substring(jsonStart, jsonEnd));
+                    
+                    // Cleanup double-texting prefix
+                    json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
                     return json;
                 } catch (e) {
                     if (i === retries - 1) throw e;
@@ -78,20 +78,26 @@
 
         function App() {
             const [gameState, setGameState] = useState('START');
+            const [category, setCategory] = useState("");
             const [qCount, setQCount] = useState(0);
             const [loading, setLoading] = useState(false);
+            const [showTaunt, setShowTaunt] = useState(false);
             const [currentSnark, setCurrentSnark] = useState("");
             const [currentText, setCurrentText] = useState("");
             const [history, setHistory] = useState([]);
-            const [showTaunt, setShowTaunt] = useState(false);
             const [err, setErr] = useState("");
+
+            const selectCategory = (cat) => {
+                setCategory(cat);
+                setGameState('READY');
+            };
 
             const startGame = async () => {
                 setGameState('PLAYING'); setQCount(1); setLoading(true); setErr("");
-                const init = [{ role: 'user', text: "Start a new game." }];
+                const init = [{ role: 'user', text: `I am thinking of a ${category}. Start game.` }];
                 setHistory(init);
                 try {
-                    const res = await fetchGemini(init);
+                    const res = await fetchGemini(init, category);
                     setCurrentSnark(res.snark); setCurrentText(res.text);
                     setHistory([...init, { role: 'model', text: JSON.stringify(res) }]);
                 } catch (e) { setGameState('ERROR'); setErr(e.message); }
@@ -103,7 +109,7 @@
                 const updated = [...history, { role: 'user', text: ans }];
                 setHistory(updated);
                 try {
-                    const res = await fetchGemini(updated);
+                    const res = await fetchGemini(updated, category);
                     setCurrentSnark(res.snark); setCurrentText(res.text);
                     setHistory([...updated, { role: 'model', text: JSON.stringify(res) }]);
                     
@@ -114,10 +120,7 @@
                         if (next > 20) setGameState('LOST');
                         else {
                             setQCount(next);
-                            if (next % 4 === 0) {
-                                setShowTaunt(true);
-                                setTimeout(() => setShowTaunt(false), 3500);
-                            }
+                            if (next % 4 === 0) { setShowTaunt(true); setTimeout(() => setShowTaunt(false), 3000); }
                         }
                     }
                 } catch (e) { setGameState('ERROR'); setErr(e.message); }
@@ -126,29 +129,41 @@
 
             return (
                 <div className="min-h-screen bg-black text-white font-sans flex items-center justify-center p-4">
-                    <div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-3xl flex flex-col min-h-[550px] relative shadow-2xl overflow-hidden">
+                    <div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-3xl flex flex-col min-h-[580px] relative shadow-2xl overflow-hidden">
                         
                         {/* CLASSIC HEADER */}
                         <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-zinc-950">
                             <div className="flex items-center space-x-2">
                                 <span className="text-amber-400"><Icons.Cpu /></span>
-                                <span className="font-bold text-lg text-white">20Q <span className="text-cyan-400">AI</span></span>
+                                <span className="font-bold text-lg">20Q <span className="text-cyan-400">AI</span></span>
                             </div>
                             {gameState === 'PLAYING' && !showTaunt && (
                                 <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest">
-                                    Question: <span className="text-cyan-400 font-bold">{qCount}</span>/20
+                                    Q: <span className="text-cyan-400 font-bold">{qCount}</span>/20 | <span className="text-zinc-400">{category}</span>
                                 </div>
                             )}
                         </div>
 
-                        {/* GAME BODY */}
-                        <div className="flex-1 flex flex-col p-8 justify-center relative">
+                        {/* GAME CONTENT */}
+                        <div className="flex-1 flex flex-col p-8 justify-center">
                             {gameState === 'START' && (
-                                <div className="text-center space-y-10">
-                                    <h1 className="text-4xl font-extralight text-white leading-tight">I will read your mind.</h1>
-                                    <p className="text-zinc-500 max-w-xs mx-auto text-sm">Think of an object. I will guess it in 20 questions or less.</p>
-                                    <button onClick={startGame} className="bg-zinc-50 text-black px-10 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all">
-                                        <Icons.Zap /> <span>Start Game</span>
+                                <div className="text-center space-y-8 animate-in fade-in duration-500">
+                                    <h1 className="text-4xl font-extralight text-white leading-tight">Choose a Category</h1>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {['Animal', 'Vegetable', 'Mineral', 'Other'].map(cat => (
+                                            <button key={cat} onClick={() => selectCategory(cat)} className="py-6 rounded-2xl border border-zinc-800 bg-zinc-900/50 hover:border-amber-400 font-bold text-xl active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
+                                        ))}
+                                    </div>
+                                    <p className="text-zinc-600 text-xs mt-4">Mineral = Inanimate objects / Electronics</p>
+                                </div>
+                            )}
+
+                            {gameState === 'READY' && (
+                                <div className="text-center space-y-10 animate-in slide-in-from-bottom duration-300">
+                                    <h2 className="text-2xl text-zinc-400 italic">"Think of a <span className="text-white uppercase font-bold tracking-widest">{category}</span>..."</h2>
+                                    <h1 className="text-3xl font-light">I am ready to read your mind.</h1>
+                                    <button onClick={startGame} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95">
+                                        <Icons.Zap /> <span>Begin Game</span>
                                     </button>
                                 </div>
                             )}
@@ -164,7 +179,7 @@
                                         <>
                                             <div className="flex-1 flex items-center justify-center">
                                                 <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 w-full min-h-[160px] flex items-center justify-center">
-                                                    {loading ? <p className="text-cyan-400 animate-pulse text-2xl font-medium uppercase tracking-widest">Analyzing...</p> : <h2 className="text-3xl font-semibold text-center leading-tight">{currentText}{!currentText.endsWith('?') ? '?' : ''}</h2>}
+                                                    {loading ? <p className="text-cyan-400 animate-pulse text-2xl font-medium tracking-widest uppercase">Analyzing...</p> : <h2 className="text-3xl font-semibold text-center leading-tight">{currentText}?</h2>}
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 mt-8">
@@ -182,30 +197,32 @@
                                     <p className="text-amber-400 italic font-medium">"{currentSnark}"</p>
                                     <h1 className="text-4xl font-black leading-tight">Is it a <span className="text-cyan-400 underline decoration-cyan-500/30 underline-offset-8 uppercase">{currentText}</span>?</h1>
                                     <div className="space-y-4 pt-4">
-                                        <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg">YES, YOU GOT IT!</button>
+                                        <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg shadow-cyan-500/10">YES, YOU GOT IT!</button>
                                         <button onClick={() => { setGameState('PLAYING'); handleAnswer("No, that was wrong. Keep going."); }} className="w-full border border-zinc-700 py-4 rounded-full font-bold text-zinc-500 uppercase">No, keep going</button>
                                     </div>
                                 </div>
                             )}
 
                             {gameState === 'WON' && (
-                                <div className="text-center space-y-8 animate-in zoom-in duration-500">
+                                <div className="text-center space-y-10 animate-in zoom-in duration-500">
+                                    <div className="text-cyan-400 flex justify-center scale-150 mb-4 font-bold tracking-widest uppercase">Victory Confirmed</div>
                                     <h1 className="text-7xl font-black italic tracking-tighter text-white">I WIN.</h1>
-                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Restart</span></button>
+                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Restart System</span></button>
                                 </div>
                             )}
 
                             {gameState === 'LOST' && (
-                                <div className="text-center space-y-8">
+                                <div className="text-center space-y-10">
                                     <h1 className="text-5xl font-black text-zinc-500 tracking-tight">YOU WIN.</h1>
+                                    <p className="text-zinc-600">My neural link failed to identify your thoughts.</p>
                                     <button onClick={() => window.location.reload()} className="border border-zinc-700 text-zinc-300 px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Try Again</span></button>
                                 </div>
                             )}
 
                             {gameState === 'ERROR' && (
                                 <div className="text-center space-y-6">
-                                    <h1 className="text-red-500 font-bold text-xl uppercase tracking-widest">System Error</h1>
-                                    <p className="text-zinc-500 text-[10px] font-mono bg-zinc-900 p-4 rounded text-left overflow-auto max-h-40 border border-red-900/30">{err}</p>
+                                    <h1 className="text-red-500 font-bold text-xl uppercase tracking-widest">Neural Link Severed</h1>
+                                    <p className="text-zinc-500 text-[10px] font-mono bg-zinc-900 p-4 rounded text-left overflow-auto max-h-40 border border-red-900/30 tracking-tight">{err}</p>
                                     <button onClick={() => window.location.reload()} className="bg-white text-black px-8 py-2 rounded-full font-bold">Reboot AI</button>
                                 </div>
                             )}
