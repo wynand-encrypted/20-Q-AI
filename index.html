@@ -16,7 +16,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- YOUR VERIFIED KEY ---
+        // --- USING YOUR VERIFIED KEY ---
         const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
         const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
         const apiKey = part1 + part2; 
@@ -29,66 +29,53 @@
             RotateCcw: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         };
 
-        const fetchGemini = async (history, category) => {
-            // Updated to the most stable Production Model strings
-            const models = ["gemini-1.5-flash", "gemini-1.5-pro"];
-            let lastError = "";
-            
-            for (const model of models) {
-                try {
-                    // Using 'v1' instead of 'v1beta' for better stability on paid accounts
-                    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-                    const payload = {
-                        contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
-                        systemInstruction: {
-                            parts: [{
-                                text: `You are the world's most arrogant 20 Questions AI. Category: ${category}.
-                                RULES:
-                                1. Ask ONLY Yes/No questions. Never ask open questions or 'is it A or B'.
-                                2. If isGuess is true, 'text' MUST be ONLY the object name (e.g. 'Laptop').
-                                3. If isGuess is false, 'text' MUST be your Yes/No question.
-                                4. Deduction: Narrow down categories quickly.
-                                5. Snark: Use short, superior comments in 'snark' field.
-                                6. JSON: Always respond in valid JSON format.`
-                            }]
-                        },
-                        generationConfig: {
-                            responseMimeType: "application/json",
-                            responseSchema: {
-                                type: "OBJECT",
-                                properties: { snark: { type: "STRING" }, isGuess: { type: "BOOLEAN" }, text: { type: "STRING" } },
-                                required: ["snark", "isGuess", "text"]
-                            }
-                        }
-                    };
+        const fetchGemini = async (history, category, retries = 3) => {
+            // Reverting to v1beta to support systemInstruction and responseSchema
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
+                systemInstruction: {
+                    parts: [{
+                        text: `You are the world's most arrogant 20 Questions AI. Category chosen: ${category}.
+                        RULES:
+                        1. Ask ONLY strategic Yes/No questions.
+                        2. If isGuess is true, 'text' MUST be ONLY the object name (e.g. 'Laptop').
+                        3. If isGuess is false, 'text' MUST be your question.
+                        4. DEDUCTION: If Mineral, focus on electronics and portability immediately.
+                        5. SNARK: Max 8 words in 'snark' field.
+                        6. JSON: Always respond in valid JSON format.`
+                    }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: { snark: { type: "STRING" }, isGuess: { type: "BOOLEAN" }, text: { type: "STRING" } },
+                        required: ["snark", "isGuess", "text"]
+                    }
+                }
+            };
 
-                    const response = await fetch(url, { 
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify(payload) 
-                    });
-                    
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     const data = await response.json();
                     
-                    if (response.ok) {
-                        let raw = data.candidates[0].content.parts[0].text;
-                        const jsonStart = raw.indexOf("{");
-                        const jsonEnd = raw.lastIndexOf("}") + 1;
-                        const json = JSON.parse(raw.substring(jsonStart, jsonEnd));
-                        
-                        // Clean double-texting bugs
-                        json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
-                        return json;
-                    } else {
-                        lastError = `${model}: ${response.status} - ${data.error?.message}`;
-                        continue; // Try the next model
-                    }
+                    if (!response.ok) throw new Error(data.error?.message || "Server error");
+
+                    let raw = data.candidates[0].content.parts[0].text;
+                    const jsonStart = raw.indexOf("{");
+                    const jsonEnd = raw.lastIndexOf("}") + 1;
+                    const json = JSON.parse(raw.substring(jsonStart, jsonEnd));
+                    
+                    // Scrub "Is it a" from guess
+                    json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
+                    return json;
                 } catch (e) {
-                    lastError = e.message;
-                    continue; 
+                    if (i === retries - 1) throw e;
+                    await new Promise(r => setTimeout(r, 2000));
                 }
             }
-            throw new Error(lastError || "All models failed to connect.");
         };
 
         function App() {
@@ -102,14 +89,14 @@
             const [history, setHistory] = useState([]);
             const [err, setErr] = useState("");
 
-            const handleCategory = (cat) => {
+            const selectCategory = (cat) => {
                 setCategory(cat);
                 setGameState('READY');
             };
 
             const startGame = async () => {
                 setGameState('PLAYING'); setQCount(1); setLoading(true); setErr("");
-                const init = [{ role: 'user', text: `I am thinking of a ${category}. Only ask me Yes/No questions.` }];
+                const init = [{ role: 'user', text: `I am thinking of a ${category}. Only ask me Yes/No questions. Start.` }];
                 setHistory(init);
                 try {
                     const res = await fetchGemini(init, category);
@@ -146,11 +133,10 @@
                 <div className="min-h-screen bg-black text-white font-sans flex items-center justify-center p-4">
                     <div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-3xl flex flex-col min-h-[580px] relative shadow-2xl overflow-hidden">
                         
-                        {/* CLASSIC HEADER */}
                         <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-zinc-950">
                             <div className="flex items-center space-x-2">
                                 <span className="text-amber-400"><Icons.Cpu /></span>
-                                <span className="font-bold text-lg text-white tracking-tight">20Q <span className="text-cyan-400 font-black">AI</span></span>
+                                <span className="font-bold text-lg text-white">20Q <span className="text-cyan-400 font-black">AI</span></span>
                             </div>
                             {gameState === 'PLAYING' && !showTaunt && (
                                 <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest">
@@ -159,25 +145,24 @@
                             )}
                         </div>
 
-                        {/* CONTENT */}
-                        <div className="flex-1 flex flex-col p-8 justify-center">
+                        <div className="flex-1 flex flex-col p-8 justify-center relative">
                             {gameState === 'START' && (
                                 <div className="text-center space-y-8 animate-in fade-in duration-500">
                                     <h1 className="text-3xl font-extralight text-white leading-tight">Pick a Category</h1>
                                     <div className="grid grid-cols-2 gap-4">
                                         {['Animal', 'Vegetable', 'Mineral', 'Other'].map(cat => (
-                                            <button key={cat} onClick={() => handleCategory(cat)} className="py-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-xl active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
+                                            <button key={cat} onClick={() => selectCategory(cat)} className="py-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-xl active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
                                         ))}
                                     </div>
-                                    <p className="text-zinc-600 text-xs mt-2 italic text-center uppercase tracking-widest">Mind Link Active</p>
+                                    <p className="text-zinc-600 text-[10px] mt-2 italic text-center uppercase tracking-widest">Neural link active</p>
                                 </div>
                             )}
 
                             {gameState === 'READY' && (
-                                <div className="text-center space-y-10">
+                                <div className="text-center space-y-10 animate-in slide-in-from-bottom duration-300">
                                     <h2 className="text-2xl text-zinc-400 italic">"Think of a <span className="text-white uppercase font-bold tracking-widest">{category}</span>..."</h2>
-                                    <button onClick={startGame} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95">
-                                        <Icons.Zap /> <span>Start Reading Mind</span>
+                                    <button onClick={startGame} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all">
+                                        <Icons.Zap /> <span>Begin Game</span>
                                     </button>
                                 </div>
                             )}
@@ -211,8 +196,8 @@
                                     <p className="text-amber-400 italic font-medium">"{currentSnark}"</p>
                                     <h1 className="text-4xl font-black leading-tight">Is it a <span className="text-cyan-400 underline decoration-cyan-500/30 underline-offset-8 uppercase tracking-tighter">{currentText}</span>?</h1>
                                     <div className="space-y-4 pt-4">
-                                        <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg shadow-cyan-500/10">YES, YOU GOT IT!</button>
-                                        <button onClick={() => { setGameState('PLAYING'); handleAnswer("No, that was wrong. Keep going."); }} className="w-full border border-zinc-700 py-4 rounded-full font-bold text-zinc-500 uppercase tracking-tighter">No, wrong</button>
+                                        <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg">YES, YOU GOT IT!</button>
+                                        <button onClick={() => { setGameState('PLAYING'); handleAnswer("No, wrong. Continue."); }} className="w-full border border-zinc-700 py-4 rounded-full font-bold text-zinc-500 uppercase tracking-tighter">No, keep going</button>
                                     </div>
                                 </div>
                             )}
@@ -220,7 +205,7 @@
                             {gameState === 'WON' && (
                                 <div className="text-center space-y-10 animate-in zoom-in duration-500">
                                     <h1 className="text-7xl font-black italic tracking-tighter text-white uppercase leading-none">I Win.</h1>
-                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>System Reboot</span></button>
+                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Restart System</span></button>
                                 </div>
                             )}
 
@@ -232,9 +217,9 @@
                             )}
 
                             {gameState === 'ERROR' && (
-                                <div className="text-center space-y-6">
+                                <div className="text-center space-y-6 p-4">
                                     <h1 className="text-red-500 font-bold text-xl uppercase tracking-widest leading-none">Neural Link error</h1>
-                                    <p className="text-zinc-500 text-[11px] font-mono bg-zinc-900 p-4 rounded text-left overflow-auto max-h-40 border border-red-900/30">{err}</p>
+                                    <p className="text-zinc-500 text-[10px] font-mono bg-zinc-900 p-4 rounded text-left overflow-auto max-h-40 border border-red-900/30">{err}</p>
                                     <button onClick={() => window.location.reload()} className="bg-white text-black px-8 py-2 rounded-full font-bold">Try Reboot</button>
                                 </div>
                             )}
