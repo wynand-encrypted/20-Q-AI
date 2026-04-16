@@ -35,8 +35,8 @@
         };
 
         const fetchGemini = async (history) => {
-            // Switched to the Lite model for better API speed limits!
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
+            // Reverted back to the proven model!
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: history.map(msg => ({
                     role: msg.role,
@@ -139,7 +139,7 @@ Rules:
                     setCurrentText(aiResponse.parsed.text);
                     
                     // The Pro Developer Pacing Fix!
-                    // This forces a 4-second "Thinking" delay to completely prevent API rate limits
+                    // This forces a "Thinking" delay to pace the player and prevent API rate limits
                     setTimeout(() => {
                         if (aiResponse.parsed.isGuess) {
                             setGameState('GUESSING');
