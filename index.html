@@ -16,7 +16,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- USING YOUR PAID TIER KEY ---
+        // --- USING YOUR VERIFIED KEY ---
         const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
         const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
         const apiKey = part1 + part2; 
@@ -29,19 +29,18 @@
             RotateCcw: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         };
 
-        const fetchGemini = async (history) => {
+        const fetchGemini = async (history, retries = 3) => {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
                 systemInstruction: {
                     parts: [{
-                        text: `You are a world-class 20 Questions expert.
-                        Rules:
-                        1. Ask ONE highly strategic Yes/No question to narrow down the object quickly.
-                        2. Be arrogant and snarky in your 'snark' field (max 8 words).
-                        3. If 'isGuess' is true, set 'text' to ONLY the object name (e.g. 'Laptop').
-                        4. If 'isGuess' is false, set 'text' to your question.
-                        5. ALWAYS respond in valid JSON.`
+                        text: `You are the world's most arrogant 20 Questions AI. 
+                        RULES:
+                        1. Use simple English but be snarky in the 'snark' field.
+                        2. If isGuess is false, put your Yes/No question in 'text'.
+                        3. If isGuess is true, put ONLY the name of the object in 'text' (e.g. 'Laptop'). Do NOT say 'Is it a laptop'.
+                        4. Be strategic. Narrow down the category (Living, Electronic, etc.) immediately.`
                     }]
                 },
                 generationConfig: {
@@ -53,9 +52,18 @@
                     }
                 }
             };
-            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const data = await res.json();
-            return JSON.parse(data.candidates[0].content.parts[0].text);
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!res.ok) throw new Error(res.status);
+                    const data = await res.json();
+                    return JSON.parse(data.candidates[0].content.parts[0].text);
+                } catch (e) {
+                    if (i === retries - 1) throw e;
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
         };
 
         function App() {
@@ -66,28 +74,28 @@
             const [currentText, setCurrentText] = useState("");
             const [history, setHistory] = useState([]);
             const [showTaunt, setShowTaunt] = useState(false);
+            const [error, setError] = useState(null);
 
             const startGame = async () => {
-                setGameState('PLAYING'); setQCount(1); setLoading(true);
-                const initial = [{ role: 'user', text: "I'm thinking of an object. Start." }];
-                setHistory(initial);
+                setGameState('PLAYING'); setQCount(1); setLoading(true); setError(null);
+                const init = [{ role: 'user', text: "Start game." }];
+                setHistory(init);
                 try {
-                    const res = await fetchGemini(initial);
-                    setHistory([...initial, { role: 'model', text: JSON.stringify(res) }]);
+                    const res = await fetchGemini(init);
                     setCurrentSnark(res.snark); setCurrentText(res.text);
-                } catch (e) { setGameState('ERROR'); }
+                    setHistory([...init, { role: 'model', text: JSON.stringify(res) }]);
+                } catch (e) { setGameState('ERROR'); setError(e.message); }
                 setLoading(false);
             };
 
             const handleAnswer = async (ans) => {
-                setLoading(true);
+                setLoading(true); setError(null);
                 const updated = [...history, { role: 'user', text: ans }];
                 setHistory(updated);
                 try {
                     const res = await fetchGemini(updated);
+                    setCurrentSnark(res.snark); setCurrentText(res.text);
                     setHistory([...updated, { role: 'model', text: JSON.stringify(res) }]);
-                    setCurrentSnark(res.snark);
-                    setCurrentText(res.text);
                     
                     if (res.isGuess) {
                         setGameState('GUESSING');
@@ -103,7 +111,7 @@
                             }
                         }
                     }
-                } catch (e) { setGameState('ERROR'); }
+                } catch (e) { setGameState('ERROR'); setError(e.message); }
                 setLoading(false);
             };
 
@@ -116,18 +124,20 @@
                                 <span className="text-amber-400"><Icons.Cpu /></span>
                                 <span className="font-bold text-lg">20Q <span className="text-cyan-400">AI</span></span>
                             </div>
-                            {gameState === 'PLAYING' && (
-                                <div className="text-xs font-mono text-zinc-500 uppercase">Question: <span className="text-cyan-400">{qCount}</span>/20</div>
+                            {gameState === 'PLAYING' && !showTaunt && (
+                                <div className="text-xs font-mono text-zinc-500 uppercase tracking-tighter">
+                                    Question: <span className="text-cyan-400 font-bold">{qCount}</span>/20
+                                </div>
                             )}
                         </div>
 
-                        {/* Main Body */}
+                        {/* Content Container */}
                         <div className="flex-1 flex flex-col p-8 justify-center relative">
                             {gameState === 'START' && (
-                                <div className="text-center space-y-8">
-                                    <h1 className="text-4xl font-light">I will read your mind.</h1>
+                                <div className="text-center space-y-10">
+                                    <h1 className="text-4xl font-extralight">I will read your mind.</h1>
                                     <p className="text-zinc-500 max-w-xs mx-auto text-sm">Think of an object. I will guess it in 20 questions or less.</p>
-                                    <button onClick={startGame} className="bg-white text-black px-10 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto">
+                                    <button onClick={startGame} className="bg-white text-black px-10 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all">
                                         <Icons.Zap /> <span>Start Game</span>
                                     </button>
                                 </div>
@@ -143,13 +153,13 @@
                                     ) : (
                                         <>
                                             <div className="flex-1 flex items-center justify-center">
-                                                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 w-full min-h-[140px] flex items-center justify-center">
-                                                    {loading ? <p className="text-cyan-400 animate-pulse text-xl">Analyzing...</p> : <h2 className="text-2xl font-semibold text-center leading-snug">{currentText}</h2>}
+                                                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 w-full min-h-[160px] flex items-center justify-center">
+                                                    {loading ? <p className="text-cyan-400 animate-pulse text-2xl font-medium">Analyzing...</p> : <h2 className="text-3xl font-semibold text-center leading-tight">{currentText}</h2>}
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 mt-8">
-                                                {['Yes', 'No', 'Sometimes', 'Unknown'].map(label => (
-                                                    <button key={label} disabled={loading} onClick={() => handleAnswer(label)} className="py-5 rounded-2xl border border-zinc-800 bg-zinc-900/50 hover:border-cyan-500 font-bold active:scale-95 transition-all disabled:opacity-30">{label}</button>
+                                                {['Yes', 'No', 'Sometimes', 'Unknown'].map(btn => (
+                                                    <button key={btn} disabled={loading} onClick={() => handleAnswer(btn)} className="py-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-cyan-500 font-bold active:bg-cyan-900/20 transition-all disabled:opacity-20">{btn}</button>
                                                 ))}
                                             </div>
                                         </>
@@ -159,34 +169,36 @@
 
                             {gameState === 'GUESSING' && (
                                 <div className="text-center space-y-10">
-                                    <p className="text-amber-400 italic">"{currentSnark}"</p>
-                                    <h1 className="text-4xl font-black">Is it a <span className="text-cyan-400 underline decoration-2">{currentText.toUpperCase()}</span>?</h1>
-                                    <div className="space-y-4">
-                                        <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg">YES, YOU GOT IT!</button>
-                                        <button onClick={() => { setGameState('PLAYING'); handleAnswer("Wrong. Continue."); }} className="w-full border border-zinc-700 py-4 rounded-full font-bold text-zinc-400">NO, WRONG</button>
+                                    <p className="text-amber-400 font-medium italic">"{currentSnark}"</p>
+                                    <h1 className="text-4xl font-black leading-tight">Is it a <span className="text-cyan-400 underline decoration-cyan-500/30">{currentText.toUpperCase()}</span>?</h1>
+                                    <div className="space-y-4 pt-4">
+                                        <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg shadow-cyan-500/10">YES, YOU GOT IT!</button>
+                                        <button onClick={() => { setGameState('PLAYING'); handleAnswer("No, that was wrong."); }} className="w-full border border-zinc-700 py-4 rounded-full font-bold text-zinc-500">NO, KEEP GOING</button>
                                     </div>
                                 </div>
                             )}
 
                             {gameState === 'WON' && (
-                                <div className="text-center space-y-8 animate-bounce">
-                                    <h1 className="text-7xl font-black italic">I WIN.</h1>
-                                    <button onClick={() => window.location.reload()} className="bg-zinc-800 px-8 py-3 rounded-full flex items-center space-x-2 mx-auto font-bold"><Icons.RotateCcw /> <span>Restart</span></button>
+                                <div className="text-center space-y-8">
+                                    <div className="text-cyan-400 flex justify-center scale-150 mb-4"><Icons.Cpu /></div>
+                                    <h1 className="text-7xl font-black italic tracking-tighter">I WIN.</h1>
+                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Play Again</span></button>
                                 </div>
                             )}
 
                             {gameState === 'LOST' && (
                                 <div className="text-center space-y-8">
-                                    <h1 className="text-6xl font-black text-zinc-500">YOU WIN.</h1>
-                                    <p className="text-zinc-600">My neural link failed to identify your object.</p>
-                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-8 py-3 rounded-full flex items-center space-x-2 mx-auto font-bold"><Icons.RotateCcw /> <span>Restart</span></button>
+                                    <h1 className="text-5xl font-black text-zinc-500 tracking-tight">YOU WIN.</h1>
+                                    <p className="text-zinc-600">You outsmarted my neural processor.</p>
+                                    <button onClick={() => window.location.reload()} className="border border-zinc-700 text-zinc-300 px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>System Reset</span></button>
                                 </div>
                             )}
 
                             {gameState === 'ERROR' && (
-                                <div className="text-center space-y-4">
-                                    <h2 className="text-red-500 font-bold">CRITICAL ERROR</h2>
-                                    <button onClick={() => window.location.reload()} className="underline">Refresh Page</button>
+                                <div className="text-center space-y-6 p-4">
+                                    <h1 className="text-red-500 font-bold text-xl uppercase tracking-widest">Neural Link Severed</h1>
+                                    <p className="text-zinc-500 text-xs font-mono bg-zinc-900 p-4 rounded border border-red-900/30">ERROR_CODE: {error || 'UNKNOWN'}</p>
+                                    <button onClick={() => window.location.reload()} className="underline text-sm text-zinc-400">Re-establish Link</button>
                                 </div>
                             )}
                         </div>
