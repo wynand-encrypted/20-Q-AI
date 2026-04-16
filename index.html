@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         body { background-color: black; color: white; margin: 0; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+        .glass { background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
     </style>
 </head>
 <body>
@@ -30,23 +31,22 @@
         };
 
         const fetchGemini = async (history, category) => {
-            // DUAL-BRAIN SETUP: Try the newest 2026 model first, fall back to stable 2.5
-            const models = ["gemini-3-flash", "gemini-2.5-flash"];
+            // TRIPLE FAILOVER LIST: We try Pro first, then Flash variants
+            const models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.5-flash"];
             let lastError = "";
 
-            for (const modelName of models) {
+            for (const model of models) {
                 try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-                    
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                     const payload = {
                         contents: history.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] })),
                         systemInstruction: {
                             parts: [{
                                 text: `You are the world's most arrogant 20 Questions AI. Category: ${category}.
                                 RULES:
-                                1. Ask ONLY strategic Yes/No questions. Never ask "Is it A or B?".
+                                1. Ask ONLY strategic Yes/No questions. 
                                 2. If isGuess is true, 'text' MUST be ONLY the object name (e.g. 'Laptop').
-                                3. If isGuess is false, 'text' MUST be your Yes/No question.
+                                3. If isGuess is false, 'text' MUST be your question.
                                 4. SNARK: Max 8 words in 'snark' field.
                                 5. ALWAYS respond in valid JSON format.`
                             }]
@@ -74,13 +74,13 @@
                         json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
                         return json;
                     } else {
-                        lastError = `${modelName}: ${response.status} - ${data.error?.message}`;
+                        lastError = `${model}: ${response.status} - ${data.error?.message}`;
                     }
                 } catch (e) {
                     lastError = e.message;
                 }
             }
-            throw new Error(lastError || "Neural link unstable.");
+            throw new Error(lastError || "All neural links are busy.");
         };
 
         function App() {
@@ -94,14 +94,14 @@
             const [history, setHistory] = useState([]);
             const [err, setErr] = useState("");
 
-            const selectCategory = (cat) => {
+            const handleCategory = (cat) => {
                 setCategory(cat);
                 setGameState('READY');
             };
 
             const startGame = async () => {
                 setGameState('PLAYING'); setQCount(1); setLoading(true); setErr("");
-                const init = [{ role: 'user', text: `I am thinking of a ${category}. Only ask me Yes/No questions. Start.` }];
+                const init = [{ role: 'user', text: `I'm thinking of a ${category}. Use only Yes/No questions.` }];
                 setHistory(init);
                 try {
                     const res = await fetchGemini(init, category);
@@ -150,13 +150,13 @@
                             )}
                         </div>
 
-                        <div className="flex-1 flex flex-col p-8 justify-center relative shadow-inner">
+                        <div className="flex-1 flex flex-col p-8 justify-center relative">
                             {gameState === 'START' && (
                                 <div className="text-center space-y-8 animate-in fade-in duration-500">
                                     <h1 className="text-3xl font-extralight text-white leading-tight uppercase tracking-tighter">Choose a Category</h1>
                                     <div className="grid grid-cols-2 gap-4">
                                         {['Animal', 'Vegetable', 'Mineral', 'Other'].map(cat => (
-                                            <button key={cat} onClick={() => selectCategory(cat)} className="py-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-xl active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
+                                            <button key={cat} onClick={() => handleCategory(cat)} className="py-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-xl active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
                                         ))}
                                     </div>
                                     <p className="text-zinc-600 text-[10px] mt-2 italic text-center uppercase tracking-widest">Neural link active</p>
@@ -166,8 +166,8 @@
                             {gameState === 'READY' && (
                                 <div className="text-center space-y-10">
                                     <h2 className="text-2xl text-zinc-400 italic">"Think of a <span className="text-white uppercase font-bold tracking-widest">{category}</span>..."</h2>
-                                    <button onClick={startGame} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all">
-                                        <Icons.Zap /> <span>Begin Mind Reading</span>
+                                    <button onClick={startGame} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all shadow-xl shadow-white/5">
+                                        <Icons.Zap /> <span>Begin Neural Link</span>
                                     </button>
                                 </div>
                             )}
