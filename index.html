@@ -1,14 +1,14 @@
-    <link rel="icon" type="image/png" href="icon.png" />
-    <link rel="apple-touch-icon" href="icon.png" />
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>20Q AI</title>
-        <link rel="icon" type="image/png" href="icon.png" />
+    
+    <link rel="icon" type="image/png" href="icon.png" />
     <link rel="apple-touch-icon" href="icon.png" />
-        <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="manifest.json" />
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -21,9 +21,9 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- YOUR VERIFIED KEY ---
-        const part1 = "AQ.Ab8RN6LEepDIXd5XObK5YV-"; 
-        const part2 = "QHkjVoDig42mwwDW8LvNRT-yEig";
+        // --- YOUR NEW FREE-TIER KEY ---
+        const part1 = "AQ.Ab8RN6Lha3SB79wCjtLWN_G"; 
+        const part2 = "4k1yS-4x6CkpeJzC_pZC1Zx1rMA";
         const apiKey = part1 + part2; 
 
         const { useState } = React;
@@ -38,7 +38,8 @@
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         const fetchGemini = async (history, category) => {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            // USING THE FREE TIER MODEL: gemini-1.5-flash
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             
             const formattedHistory = history.map(msg => ({
                 role: msg.role === 'user' ? 'user' : 'model',
@@ -71,14 +72,12 @@
                         body: JSON.stringify(payload)
                     });
                     
-                    // THE FIX: Read as raw text first so empty 503 pages don't crash the app
                     const rawText = await response.text(); 
                     
                     let data;
                     try {
                         data = JSON.parse(rawText);
                     } catch (parseError) {
-                        // This safely catches the "Unexpected end of JSON" error!
                         throw new Error(`Server Overloaded (Status ${response.status})`);
                     }
                     
@@ -96,7 +95,6 @@
                     } else {
                         lastError = data.error?.message || `Server Error ${response.status}`;
                         
-                        // IF BUSY (503), WAIT AND RETRY
                         if (response.status >= 500 || response.status === 429) {
                             await sleep(2000 * attempt);
                             continue;
@@ -106,7 +104,6 @@
 
                 } catch (e) {
                     lastError = e.message;
-                    // Trigger retry for network drops or caught 503s
                     if (lastError.includes("Server Overloaded") || lastError.includes("Failed to fetch") || lastError.includes("AI Output Malformed")) {
                         await sleep(2000 * attempt);
                         continue;
@@ -178,6 +175,7 @@
                 <div className="min-h-screen bg-black text-white font-sans flex items-center justify-center p-4">
                     <div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-3xl flex flex-col min-h-[580px] relative shadow-2xl overflow-hidden">
                         
+                        {/* Header */}
                         <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-zinc-950">
                             <div className="flex items-center space-x-2">
                                 <span className="text-amber-400"><Icons.Cpu /></span>
@@ -190,16 +188,29 @@
                             )}
                         </div>
 
+                        {/* Main Content */}
                         <div className="flex-1 flex flex-col p-8 justify-center relative">
                             {gameState === 'START' && (
-                                <div className="text-center space-y-8 animate-in fade-in duration-500">
-                                    <h1 className="text-3xl font-extralight text-white leading-tight uppercase tracking-tighter">Choose a Category</h1>
-                                    <div className="grid grid-cols-2 gap-4">
+                                <div className="text-center space-y-8 animate-in fade-in duration-500 flex flex-col items-center">
+                                    
+                                    {/* --- GLOWING LOGO SECTION --- */}
+                                    <div className="relative mb-6 mt-2">
+                                        <div className="absolute inset-0 bg-cyan-500 blur-2xl opacity-10 rounded-full animate-pulse"></div>
+                                        <div className="bg-zinc-900 border-2 border-cyan-500/20 p-8 rounded-[2rem] relative shadow-[0_0_40px_rgba(6,182,212,0.1)] transform rotate-12 hover:rotate-0 transition-all duration-500">
+                                            <div className="text-cyan-400 scale-[2]"><Icons.Cpu /></div>
+                                        </div>
+                                    </div>
+                                    <h1 className="text-4xl font-black text-white leading-tight uppercase tracking-tighter drop-shadow-lg">
+                                        20Q <span className="text-cyan-400">AI</span>
+                                    </h1>
+                                    {/* -------------------------------- */}
+
+                                    <div className="grid grid-cols-2 gap-4 w-full">
                                         {['Animal', 'Vegetable', 'Mineral', 'Other'].map(cat => (
-                                            <button key={cat} onClick={() => selectCategory(cat)} className="py-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-xl active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
+                                            <button key={cat} onClick={() => selectCategory(cat)} className="py-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-lg active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
                                         ))}
                                     </div>
-                                    <p className="text-zinc-600 text-[10px] mt-2 italic text-center uppercase tracking-widest">Mineral = Electronics & Objects</p>
+                                    <p className="text-zinc-600 text-[10px] mt-2 italic text-center uppercase tracking-widest">Mind Link Initialized</p>
                                 </div>
                             )}
 
@@ -216,7 +227,7 @@
                                     ) : (
                                         <>
                                             <h2 className="text-2xl text-zinc-400 italic">"Think of a <span className="text-white uppercase font-bold tracking-widest">{category}</span>..."</h2>
-                                            <button onClick={startGame} disabled={loading} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all disabled:opacity-50">
+                                            <button onClick={startGame} disabled={loading} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
                                                 <Icons.Zap /> <span>{loading ? "Connecting..." : "Begin Mind Reading"}</span>
                                             </button>
                                         </>
