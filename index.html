@@ -38,7 +38,7 @@
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         const fetchGemini = async (history, category) => {
-            // USING THE FREE TIER MODEL: gemini-1.5-flash
+            // USING THE FREE TIER MODEL: gemini-2.5-flash
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             
             const formattedHistory = history.map(msg => ({
