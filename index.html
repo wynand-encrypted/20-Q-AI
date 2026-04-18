@@ -38,8 +38,7 @@
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         const fetchGemini = async (history, category, updateStatus) => {
-            // BACK TO 1.5-FLASH FOR THE 15-RPM SPEED LIMIT!
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             
             const formattedHistory = history.map(msg => ({
                 role: msg.role === 'user' ? 'user' : 'model',
@@ -62,7 +61,7 @@
 
             let lastError = "";
 
-            for (let attempt = 1; attempt <= 4; attempt++) {
+            for (let attempt = 1; attempt <= 5; attempt++) {
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
@@ -93,16 +92,16 @@
                     } else {
                         lastError = data.error?.message || `Server Error ${response.status}`;
                         
-                        // IF THEY SOMEHOW BEAT 15 Q's A MINUTE, JUST WAIT 3 SECONDS
+                        // IF IT HITS THE 5-RPM LIMIT, SILENTLY WAIT 12 SECONDS
                         if (response.status === 429) {
-                            updateStatus("Thinking...");
-                            await sleep(3000); 
+                            updateStatus("Deep scan in progress...");
+                            await sleep(12000); 
                             continue;
                         }
                         
                         if (response.status >= 500) {
                             updateStatus("Bypassing server traffic...");
-                            await sleep(2000 * attempt);
+                            await sleep(3000 * attempt);
                             continue;
                         }
                         throw new Error(lastError);
@@ -111,7 +110,7 @@
                 } catch (e) {
                     lastError = e.message;
                     if (lastError.includes("Server Overloaded") || lastError.includes("Failed to fetch") || lastError.includes("AI Output Malformed")) {
-                        await sleep(2000 * attempt);
+                        await sleep(3000 * attempt);
                         continue;
                     }
                     throw e; 
@@ -125,7 +124,7 @@
             const [category, setCategory] = useState("");
             const [qCount, setQCount] = useState(0);
             const [loading, setLoading] = useState(false);
-            const [loadingText, setLoadingText] = useState("Analyzing..."); 
+            const [loadingText, setLoadingText] = useState("Thinking..."); 
             const [showTaunt, setShowTaunt] = useState(false);
             const [currentSnark, setCurrentSnark] = useState("");
             const [currentText, setCurrentText] = useState("");
@@ -140,7 +139,18 @@
             };
 
             const triggerAPI = async (actionType, updatedHistory, fallbackText) => {
-                setLoading(true); setSoftError(""); setLoadingText("Analyzing...");
+                setLoading(true); 
+                setSoftError(""); 
+                
+                // THE PACING FIX: Add a forced natural delay before hitting the server
+                if (actionType === 'START') {
+                    setLoadingText("Establishing Neural Link...");
+                    await sleep(1500);
+                } else {
+                    setLoadingText("Thinking...");
+                    await sleep(2000); // Forces a smooth 2-second wait on every single question
+                }
+
                 try {
                     const res = await fetchGemini(updatedHistory, category, setLoadingText);
                     setCurrentSnark(res.snark); setCurrentText(res.text);
