@@ -21,7 +21,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- YOUR NEW FREE-TIER KEY ---
+        // --- YOUR FREE-TIER KEY ---
         const part1 = "AQ.Ab8RN6Lha3SB79wCjtLWN_G"; 
         const part2 = "4k1yS-4x6CkpeJzC_pZC1Zx1rMA";
         const apiKey = part1 + part2; 
@@ -37,16 +37,20 @@
 
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        const fetchGemini = async (history, category) => {
-            // USING THE FREE TIER MODEL: gemini-2.5-flash
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const fetchGemini = async (history, category, updateStatus) => {
+            // THE WATERFALL: A list of backup brains to cycle through instantly
+            const models = [
+                "gemini-2.5-flash", 
+                "gemini-1.5-flash-8b", 
+                "gemini-1.5-pro",
+                "gemini-1.5-flash"
+            ];
             
             const formattedHistory = history.map(msg => ({
                 role: msg.role === 'user' ? 'user' : 'model',
                 parts: [{ text: msg.text }]
             }));
 
-            // BARE METAL: Stripped of everything that causes 400 errors
             const payload = {
                 contents: [
                     { 
@@ -63,55 +67,59 @@
 
             let lastError = "";
 
-            // AUTO-RETRY LOOP
-            for (let attempt = 1; attempt <= 5; attempt++) {
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const rawText = await response.text(); 
-                    
-                    let data;
+            // We loop 3 times. Inside that, we rapidly try every model in our list.
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                for (const model of models) {
                     try {
-                        data = JSON.parse(rawText);
-                    } catch (parseError) {
-                        throw new Error(`Server Overloaded (Status ${response.status})`);
-                    }
-                    
-                    if (response.ok) {
-                        let aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                         
-                        const jsonStart = aiText.indexOf("{");
-                        const jsonEnd = aiText.lastIndexOf("}");
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
                         
-                        if (jsonStart === -1 || jsonEnd === -1) throw new Error("AI Output Malformed");
+                        const rawText = await response.text(); 
                         
-                        const json = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
-                        json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
-                        return json;
-                    } else {
-                        lastError = data.error?.message || `Server Error ${response.status}`;
-                        
-                        if (response.status >= 500 || response.status === 429) {
-                            await sleep(2000 * attempt);
-                            continue;
+                        let data;
+                        try {
+                            data = JSON.parse(rawText);
+                        } catch (parseError) {
+                            throw new Error(`Server Overloaded`);
                         }
-                        throw new Error(lastError);
-                    }
+                        
+                        if (response.ok) {
+                            let aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                            
+                            const jsonStart = aiText.indexOf("{");
+                            const jsonEnd = aiText.lastIndexOf("}");
+                            
+                            if (jsonStart === -1 || jsonEnd === -1) throw new Error("AI Output Malformed");
+                            
+                            const json = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
+                            json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
+                            return json;
+                        } else {
+                            // IF IT HITS THE SPEED LIMIT (429) OR IS UNAVAILABLE (404), INSTANTLY SWITCH MODELS
+                            if (response.status === 429 || response.status === 404 || response.status >= 500) {
+                                // We silently skip to the next model in the array without making the user wait
+                                continue; 
+                            }
+                            
+                            lastError = data.error?.message || `Server Error ${response.status}`;
+                            throw new Error(lastError);
+                        }
 
-                } catch (e) {
-                    lastError = e.message;
-                    if (lastError.includes("Server Overloaded") || lastError.includes("Failed to fetch") || lastError.includes("AI Output Malformed")) {
-                        await sleep(2000 * attempt);
+                    } catch (e) {
+                        lastError = e.message;
+                        // If one model fails, we just keep trying the others in the list
                         continue;
                     }
-                    throw e; 
                 }
+                // If by some crazy chance ALL 4 models are maxed out, it waits just 1.5 seconds before cycling again
+                await sleep(1500);
             }
-            throw new Error(lastError || "Google's servers are completely gridlocked right now.");
+            throw new Error("Network offline. Please try again.");
         };
 
         function App() {
@@ -119,6 +127,7 @@
             const [category, setCategory] = useState("");
             const [qCount, setQCount] = useState(0);
             const [loading, setLoading] = useState(false);
+            const [loadingText, setLoadingText] = useState("Analyzing...");
             const [showTaunt, setShowTaunt] = useState(false);
             const [currentSnark, setCurrentSnark] = useState("");
             const [currentText, setCurrentText] = useState("");
@@ -133,9 +142,9 @@
             };
 
             const triggerAPI = async (actionType, updatedHistory, fallbackText) => {
-                setLoading(true); setSoftError("");
+                setLoading(true); setSoftError(""); setLoadingText("Analyzing...");
                 try {
-                    const res = await fetchGemini(updatedHistory, category);
+                    const res = await fetchGemini(updatedHistory, category, setLoadingText);
                     setCurrentSnark(res.snark); setCurrentText(res.text);
                     setHistory([...updatedHistory, { role: 'model', text: JSON.stringify(res) }]);
                     
@@ -192,8 +201,6 @@
                         <div className="flex-1 flex flex-col p-8 justify-center relative">
                             {gameState === 'START' && (
                                 <div className="text-center space-y-8 animate-in fade-in duration-500 flex flex-col items-center">
-                                    
-                                    {/* --- GLOWING LOGO SECTION --- */}
                                     <div className="relative mb-6 mt-2">
                                         <div className="absolute inset-0 bg-cyan-500 blur-2xl opacity-10 rounded-full animate-pulse"></div>
                                         <div className="bg-zinc-900 border-2 border-cyan-500/20 p-8 rounded-[2rem] relative shadow-[0_0_40px_rgba(6,182,212,0.1)] transform rotate-12 hover:rotate-0 transition-all duration-500">
@@ -203,8 +210,6 @@
                                     <h1 className="text-4xl font-black text-white leading-tight uppercase tracking-tighter drop-shadow-lg">
                                         20Q <span className="text-cyan-400">AI</span>
                                     </h1>
-                                    {/* -------------------------------- */}
-
                                     <div className="grid grid-cols-2 gap-4 w-full">
                                         {['Animal', 'Vegetable', 'Mineral', 'Other'].map(cat => (
                                             <button key={cat} onClick={() => selectCategory(cat)} className="py-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-lg active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
@@ -253,8 +258,8 @@
                                     ) : (
                                         <>
                                             <div className="flex-1 flex items-center justify-center">
-                                                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 w-full min-h-[160px] flex items-center justify-center shadow-inner">
-                                                    {loading ? <p className="text-cyan-400 animate-pulse text-2xl font-medium tracking-widest uppercase">Analyzing...</p> : <h2 className="text-3xl font-semibold text-center leading-tight tracking-tight">{currentText}?</h2>}
+                                                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 w-full min-h-[160px] flex items-center justify-center shadow-inner px-4">
+                                                    {loading ? <p className="text-cyan-400 animate-pulse text-lg md:text-xl font-medium tracking-widest uppercase text-center">{loadingText}</p> : <h2 className="text-3xl font-semibold text-center leading-tight tracking-tight">{currentText}?</h2>}
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 mt-8">
