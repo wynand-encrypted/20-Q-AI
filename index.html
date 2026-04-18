@@ -38,13 +38,7 @@
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         const fetchGemini = async (history, category, updateStatus) => {
-            // THE WATERFALL: A list of backup brains to cycle through instantly
-            const models = [
-                "gemini-2.5-flash", 
-                "gemini-1.5-flash-8b", 
-                "gemini-1.5-pro",
-                "gemini-1.5-flash"
-            ];
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             
             const formattedHistory = history.map(msg => ({
                 role: msg.role === 'user' ? 'user' : 'model',
@@ -67,59 +61,62 @@
 
             let lastError = "";
 
-            // We loop 3 times. Inside that, we rapidly try every model in our list.
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                for (const model of models) {
+            for (let attempt = 1; attempt <= 6; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const rawText = await response.text(); 
+                    
+                    let data;
                     try {
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                        data = JSON.parse(rawText);
+                    } catch (parseError) {
+                        throw new Error(`Server Overloaded (Status ${response.status})`);
+                    }
+                    
+                    if (response.ok) {
+                        let aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
                         
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
+                        const jsonStart = aiText.indexOf("{");
+                        const jsonEnd = aiText.lastIndexOf("}");
                         
-                        const rawText = await response.text(); 
+                        if (jsonStart === -1 || jsonEnd === -1) throw new Error("AI Output Malformed");
                         
-                        let data;
-                        try {
-                            data = JSON.parse(rawText);
-                        } catch (parseError) {
-                            throw new Error(`Server Overloaded`);
+                        const json = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
+                        json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
+                        return json;
+                    } else {
+                        lastError = data.error?.message || `Server Error ${response.status}`;
+                        
+                        // GRACEFUL COOLDOWN FEATURE
+                        if (response.status === 429) {
+                            updateStatus("You're too fast! Cooling Neural Core...");
+                            await sleep(15000); 
+                            continue;
                         }
                         
-                        if (response.ok) {
-                            let aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                            
-                            const jsonStart = aiText.indexOf("{");
-                            const jsonEnd = aiText.lastIndexOf("}");
-                            
-                            if (jsonStart === -1 || jsonEnd === -1) throw new Error("AI Output Malformed");
-                            
-                            const json = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
-                            json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
-                            return json;
-                        } else {
-                            // IF IT HITS THE SPEED LIMIT (429) OR IS UNAVAILABLE (404), INSTANTLY SWITCH MODELS
-                            if (response.status === 429 || response.status === 404 || response.status >= 500) {
-                                // We silently skip to the next model in the array without making the user wait
-                                continue; 
-                            }
-                            
-                            lastError = data.error?.message || `Server Error ${response.status}`;
-                            throw new Error(lastError);
+                        if (response.status >= 500) {
+                            updateStatus("Bypassing server traffic...");
+                            await sleep(3000 * attempt);
+                            continue;
                         }
+                        throw new Error(lastError);
+                    }
 
-                    } catch (e) {
-                        lastError = e.message;
-                        // If one model fails, we just keep trying the others in the list
+                } catch (e) {
+                    lastError = e.message;
+                    if (lastError.includes("Server Overloaded") || lastError.includes("Failed to fetch") || lastError.includes("AI Output Malformed")) {
+                        await sleep(3000 * attempt);
                         continue;
                     }
+                    throw e; 
                 }
-                // If by some crazy chance ALL 4 models are maxed out, it waits just 1.5 seconds before cycling again
-                await sleep(1500);
             }
-            throw new Error("Network offline. Please try again.");
+            throw new Error("Connection lost. Please tap a response to try again.");
         };
 
         function App() {
@@ -127,7 +124,7 @@
             const [category, setCategory] = useState("");
             const [qCount, setQCount] = useState(0);
             const [loading, setLoading] = useState(false);
-            const [loadingText, setLoadingText] = useState("Analyzing...");
+            const [loadingText, setLoadingText] = useState("Analyzing..."); 
             const [showTaunt, setShowTaunt] = useState(false);
             const [currentSnark, setCurrentSnark] = useState("");
             const [currentText, setCurrentText] = useState("");
@@ -319,3 +316,4 @@
     </script>
 </body>
 </html>
+
