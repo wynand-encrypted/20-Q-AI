@@ -3,277 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>20Q AI</title>
-    
-    <link rel="icon" type="image/png" href="icon.png" />
-    <link rel="apple-touch-icon" href="icon.png" />
-    <link rel="manifest" href="manifest.json" />
-
+    <title>20Q AI - Local Matrix</title>
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { background-color: black; color: white; margin: 0; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+        body { background-color: black; color: white; margin: 0; overflow-x: hidden; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- YOUR FREE-TIER KEY ---
-        const part1 = "AQ.Ab8RN6Lha3SB79wCjtLWN_G"; 
-        const part2 = "4k1yS-4x6CkpeJzC_pZC1Zx1rMA";
-        const apiKey = part1 + part2; 
+        // --- 1. THE SYNAPTIC MATRIX (LOCAL DATABASE) ---
+        // In a real app, you would load a massive JSON file here.
+        const DB = {
+            objects: ["A dog", "An apple", "A car", "A computer", "A cloud", "A pencil"],
+            questions: [
+                "Is it an animal?", 
+                "Is it edible?", 
+                "Does it have wheels?",
+                "Does it plug in or use batteries?", 
+                "Can you hold it in one hand?", 
+                "Is it found outdoors natively?"
+            ],
+            // Rows correspond to objects. Columns correspond to questions.
+            // Values: 0.0 (Hard No) to 1.0 (Hard Yes). 0.5 means Maybe/Sometimes.
+            matrix: [
+                [0.99, 0.05, 0.01, 0.01, 0.40, 0.80], // Dog
+                [0.01, 0.99, 0.01, 0.01, 0.95, 0.50], // Apple
+                [0.01, 0.01, 0.99, 0.90, 0.01, 0.99], // Car
+                [0.01, 0.01, 0.01, 0.99, 0.30, 0.10], // Computer
+                [0.01, 0.01, 0.01, 0.01, 0.01, 0.99], // Cloud
+                [0.01, 0.01, 0.01, 0.01, 0.99, 0.30]  // Pencil
+            ]
+        };
 
-        const { useState } = React;
+        const TAUNTS = [
+            "I'm reading your mind.", "Too easy.", "I've almost got you.", 
+            "You can't hide it.", "It's only a matter of time.", "My brain is massive."
+        ];
 
+        // --- Inline SVG Icons ---
         const Icons = {
             Cpu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>,
             Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>,
+            XOctagon: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
+            Radio: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>,
+            ShieldAlert: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>,
             RotateCcw: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>,
             AlertTriangle: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         };
 
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-        const fetchGemini = async (history, category, updateStatus) => {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            
-            const formattedHistory = history.map(msg => ({
-                role: msg.role === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.text }]
-            }));
-
-            const payload = {
-                contents: [
-                    { 
-                        role: 'user', 
-                        parts: [{ text: `You are playing 20 Questions. The category is ${category}. You must respond ONLY with raw, valid JSON. No markdown formatting. Format exactly like this: {"snark": "witty arrogant comment", "isGuess": false, "text": "Is it electronic?"}. If you are ready to guess the object, set isGuess to true and put ONLY the name of the object in text field. ONLY ASK YES/NO QUESTIONS.` }] 
-                    },
-                    { 
-                        role: 'model', 
-                        parts: [{ text: `{"snark": "I am ready.", "isGuess": false, "text": "Understood."}` }] 
-                    },
-                    ...formattedHistory
-                ]
-            };
-
-            let lastError = "";
-
-            for (let attempt = 1; attempt <= 5; attempt++) {
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const rawText = await response.text(); 
-                    
-                    let data;
-                    try {
-                        data = JSON.parse(rawText);
-                    } catch (parseError) {
-                        throw new Error(`Server Overloaded (Status ${response.status})`);
-                    }
-                    
-                    if (response.ok) {
-                        let aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                        
-                        const jsonStart = aiText.indexOf("{");
-                        const jsonEnd = aiText.lastIndexOf("}");
-                        
-                        if (jsonStart === -1 || jsonEnd === -1) throw new Error("AI Output Malformed");
-                        
-                        const json = JSON.parse(aiText.substring(jsonStart, jsonEnd + 1));
-                        json.text = json.text.replace(/Is it a\s+/i, "").replace(/Is it an\s+/i, "").replace(/\?/g, "");
-                        return json;
-                    } else {
-                        lastError = data.error?.message || `Server Error ${response.status}`;
-                        
-                        // IF IT HITS THE 5-RPM LIMIT, SILENTLY WAIT 12 SECONDS
-                        if (response.status === 429) {
-                            updateStatus("Deep scan in progress...");
-                            await sleep(12000); 
-                            continue;
-                        }
-                        
-                        if (response.status >= 500) {
-                            updateStatus("Bypassing server traffic...");
-                            await sleep(3000 * attempt);
-                            continue;
-                        }
-                        throw new Error(lastError);
-                    }
-
-                } catch (e) {
-                    lastError = e.message;
-                    if (lastError.includes("Server Overloaded") || lastError.includes("Failed to fetch") || lastError.includes("AI Output Malformed")) {
-                        await sleep(3000 * attempt);
-                        continue;
-                    }
-                    throw e; 
-                }
-            }
-            throw new Error("Connection lost. Please tap a response to try again.");
-        };
+        const { useState, useEffect } = React;
 
         function App() {
             const [gameState, setGameState] = useState('START');
-            const [category, setCategory] = useState("");
             const [qCount, setQCount] = useState(0);
-            const [loading, setLoading] = useState(false);
-            const [loadingText, setLoadingText] = useState("Thinking..."); 
             const [showTaunt, setShowTaunt] = useState(false);
             const [currentSnark, setCurrentSnark] = useState("");
             const [currentText, setCurrentText] = useState("");
-            const [history, setHistory] = useState([]);
             
-            const [softError, setSoftError] = useState("");
-            const [pendingAction, setPendingAction] = useState(null);
+            // --- AI Engine State ---
+            const [probabilities, setProbabilities] = useState([]);
+            const [askedQuestions, setAskedQuestions] = useState([]);
+            const [currentQIndex, setCurrentQIndex] = useState(-1);
 
-            const selectCategory = (cat) => {
-                setCategory(cat);
-                setGameState('READY');
-            };
+            const getRandomTaunt = () => TAUNTS[Math.floor(Math.random() * TAUNTS.length)];
 
-            const triggerAPI = async (actionType, updatedHistory, fallbackText) => {
-                setLoading(true); 
-                setSoftError(""); 
+            // Finds the question that best splits the remaining probable objects in half
+            const getBestQuestion = (currentProbs, asked) => {
+                let bestQ = -1;
+                let bestScore = Infinity; // We want the score closest to 0.5
                 
-                // THE PACING FIX: Add a forced natural delay before hitting the server
-                if (actionType === 'START') {
-                    setLoadingText("Establishing Neural Link...");
-                    await sleep(1500);
-                } else {
-                    setLoadingText("Thinking...");
-                    await sleep(2000); // Forces a smooth 2-second wait on every single question
-                }
-
-                try {
-                    const res = await fetchGemini(updatedHistory, category, setLoadingText);
-                    setCurrentSnark(res.snark); setCurrentText(res.text);
-                    setHistory([...updatedHistory, { role: 'model', text: JSON.stringify(res) }]);
+                for (let q = 0; q < DB.questions.length; q++) {
+                    if (asked.includes(q)) continue;
                     
-                    if (res.isGuess) {
-                        setGameState('GUESSING');
-                    } else {
-                        if (actionType === 'START') {
-                            setGameState('PLAYING'); setQCount(1);
-                        } else {
-                            const next = qCount + 1;
-                            if (next > 20) setGameState('LOST');
-                            else {
-                                setQCount(next);
-                                if (next % 4 === 0) { setShowTaunt(true); setTimeout(() => setShowTaunt(false), 3000); }
-                            }
-                        }
+                    let expectedYesProbability = 0;
+                    for (let o = 0; o < currentProbs.length; o++) {
+                        expectedYesProbability += currentProbs[o] * DB.matrix[o][q];
                     }
-                } catch (e) { 
-                    setSoftError(e.message);
-                    setPendingAction(() => () => triggerAPI(actionType, updatedHistory, fallbackText));
+                    
+                    // A perfect question splits the field 50/50. 
+                    const score = Math.abs(expectedYesProbability - 0.5);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestQ = q;
+                    }
                 }
-                setLoading(false);
+                
+                // If we run out of questions, just return whatever is left (fallback)
+                if (bestQ === -1) {
+                    bestQ = DB.questions.findIndex((_, i) => !asked.includes(i));
+                }
+                return bestQ;
             };
 
             const startGame = () => {
-                const init = [{ role: 'user', text: `I have an object in mind. Ask your first question.` }];
-                setHistory(init);
-                triggerAPI('START', init, 'Start');
+                setGameState('PLAYING');
+                setQCount(1);
+                setShowTaunt(false);
+                
+                // 1. Give all objects equal starting probability (1/N)
+                const initialProbs = new Array(DB.objects.length).fill(1 / DB.objects.length);
+                setProbabilities(initialProbs);
+                setAskedQuestions([]);
+                
+                // 2. Pick the first best question
+                const firstQIndex = getBestQuestion(initialProbs, []);
+                setCurrentQIndex(firstQIndex);
+                setCurrentText(DB.questions[firstQIndex]);
             };
 
-            const handleAnswer = (ans) => {
-                const updated = [...history, { role: 'user', text: ans }];
-                triggerAPI('ANSWER', updated, ans);
+            const handleAnswer = (answer) => {
+                let nextQCount = qCount + 1;
+                
+                // 1. Update Probabilities based on answer (Bayes' Theorem approach)
+                let newProbs = [...probabilities];
+                let sum = 0;
+                
+                for (let o = 0; o < DB.objects.length; o++) {
+                    const weight = DB.matrix[o][currentQIndex];
+                    let likelihood = 1.0;
+                    
+                    if (answer === 'Yes') likelihood = weight;
+                    else if (answer === 'No') likelihood = 1.0 - weight;
+                    else if (answer === 'Sometimes') likelihood = 1.0 - Math.abs(0.5 - weight);
+                    // 'Unknown' leaves likelihood at 1.0 (no change)
+
+                    // Cap likelihoods to prevent math exploding to pure 0
+                    likelihood = Math.max(0.05, Math.min(0.95, likelihood));
+                    
+                    newProbs[o] *= likelihood;
+                    sum += newProbs[o];
+                }
+                
+                // 2. Normalize probabilities so they sum to 1.0
+                newProbs = newProbs.map(p => p / sum);
+                setProbabilities(newProbs);
+                
+                const newAsked = [...askedQuestions, currentQIndex];
+                setAskedQuestions(newAsked);
+
+                // 3. Find the most likely object
+                let bestMatchIndex = 0;
+                let maxProb = 0;
+                for (let i = 0; i < newProbs.length; i++) {
+                    if (newProbs[i] > maxProb) {
+                        maxProb = newProbs[i];
+                        bestMatchIndex = i;
+                    }
+                }
+
+                // 4. Decide: Guess or Ask Another Question?
+                // If we are over 85% sure, OR we've hit 20 questions, make a guess.
+                if (maxProb > 0.85 || nextQCount > 20 || newAsked.length >= DB.questions.length) {
+                    setGameState('GUESSING');
+                    setCurrentSnark(getRandomTaunt());
+                    setCurrentText(DB.objects[bestMatchIndex]);
+                } else {
+                    setQCount(nextQCount);
+                    const nextQIndex = getBestQuestion(newProbs, newAsked);
+                    setCurrentQIndex(nextQIndex);
+                    setCurrentText(DB.questions[nextQIndex]);
+
+                    // Flash a taunt every 4 questions
+                    if (nextQCount % 4 === 0 && nextQCount < 20) {
+                        setCurrentSnark(getRandomTaunt());
+                        setShowTaunt(true);
+                        setTimeout(() => { setShowTaunt(false); }, 3000);
+                    }
+                }
+            };
+
+            const handleGuessResponse = (isCorrect) => {
+                if (isCorrect) { 
+                    setGameState('WON'); 
+                } else {
+                    if (qCount >= 20 || askedQuestions.length >= DB.questions.length) { 
+                        setGameState('LOST'); 
+                    } else {
+                        // If wrong, zero out the probability of that item and keep playing
+                        const currentGuessIndex = DB.objects.indexOf(currentText);
+                        let updatedProbs = [...probabilities];
+                        updatedProbs[currentGuessIndex] = 0.001; // Almost zero
+                        
+                        // Renormalize
+                        let sum = updatedProbs.reduce((a, b) => a + b, 0);
+                        updatedProbs = updatedProbs.map(p => p / sum);
+                        setProbabilities(updatedProbs);
+
+                        setGameState('PLAYING');
+                        const nextQIndex = getBestQuestion(updatedProbs, askedQuestions);
+                        setCurrentQIndex(nextQIndex);
+                        setCurrentText(DB.questions[nextQIndex]);
+                    }
+                }
+            };
+
+            const resetGame = () => {
+                setGameState('START');
+                setQCount(0);
+                setShowTaunt(false);
+                setCurrentSnark("");
+                setCurrentText("");
+                setProbabilities([]);
+                setAskedQuestions([]);
+                setCurrentQIndex(-1);
             };
 
             return (
-                <div className="min-h-screen bg-black text-white font-sans flex items-center justify-center p-4">
-                    <div className="w-full max-w-lg bg-zinc-950 border border-zinc-900 rounded-3xl flex flex-col min-h-[580px] relative shadow-2xl overflow-hidden">
+                <div className="min-h-screen bg-black text-zinc-100 font-sans flex flex-col items-center justify-center p-4">
+                    <div className="w-full max-w-lg mx-auto bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden flex flex-col min-h-[550px] relative z-10 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
                         
-                        {/* Header */}
-                        <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-zinc-950">
-                            <div className="flex items-center space-x-2">
+                        <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center">
+                            <div className="flex items-center space-x-2.5">
                                 <span className="text-amber-400"><Icons.Cpu /></span>
-                                <span className="font-bold text-lg text-white">20Q <span className="text-cyan-400 font-black">AI</span></span>
+                                <span className="font-extrabold text-lg text-white">20Q <span className="text-cyan-400">AI</span></span>
                             </div>
-                            {gameState === 'PLAYING' && !showTaunt && !softError && (
-                                <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest">
-                                    Q: <span className="text-cyan-400 font-bold">{qCount}</span>/20 | <span className="text-zinc-400">{category}</span>
+                            {gameState !== 'START' && gameState !== 'ERROR' && (
+                                <div className="flex items-center space-x-2 px-3 py-1 bg-zinc-900/50 rounded-full font-mono text-sm">
+                                    <span className="text-zinc-300">QUESTION:</span>
+                                    <span className="text-cyan-300 font-bold">{Math.min(qCount, 20)}</span>
+                                    <span className="text-zinc-500">/20</span>
                                 </div>
                             )}
                         </div>
 
-                        {/* Main Content */}
-                        <div className="flex-1 flex flex-col p-8 justify-center relative">
+                        <div className="flex-1 flex flex-col p-8 md:p-10 justify-center relative">
                             {gameState === 'START' && (
-                                <div className="text-center space-y-8 animate-in fade-in duration-500 flex flex-col items-center">
-                                    <div className="relative mb-6 mt-2">
-                                        <div className="absolute inset-0 bg-cyan-500 blur-2xl opacity-10 rounded-full animate-pulse"></div>
-                                        <div className="bg-zinc-900 border-2 border-cyan-500/20 p-8 rounded-[2rem] relative shadow-[0_0_40px_rgba(6,182,212,0.1)] transform rotate-12 hover:rotate-0 transition-all duration-500">
-                                            <div className="text-cyan-400 scale-[2]"><Icons.Cpu /></div>
-                                        </div>
-                                    </div>
-                                    <h1 className="text-4xl font-black text-white leading-tight uppercase tracking-tighter drop-shadow-lg">
-                                        20Q <span className="text-cyan-400">AI</span>
-                                    </h1>
-                                    <div className="grid grid-cols-2 gap-4 w-full">
-                                        {['Animal', 'Vegetable', 'Mineral', 'Other'].map(cat => (
-                                            <button key={cat} onClick={() => selectCategory(cat)} className="py-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-amber-400 font-bold text-lg active:scale-95 transition-all uppercase tracking-widest">{cat}</button>
-                                        ))}
-                                    </div>
-                                    <p className="text-zinc-600 text-[10px] mt-2 italic text-center uppercase tracking-widest">Mind Link Initialized</p>
-                                </div>
-                            )}
-
-                            {gameState === 'READY' && (
-                                <div className="text-center space-y-10 animate-in slide-in-from-bottom duration-300">
-                                    {softError ? (
-                                        <div className="space-y-6">
-                                            <div className="text-amber-400 flex justify-center scale-150"><Icons.AlertTriangle /></div>
-                                            <h2 className="text-sm font-mono text-red-400 break-words bg-red-950/30 p-4 rounded-xl border border-red-900/50">{softError}</h2>
-                                            <button onClick={pendingAction} disabled={loading} className="bg-amber-500 text-black px-12 py-4 rounded-full font-bold w-full disabled:opacity-50">
-                                                {loading ? "Reconnecting..." : "Retry Connection"}
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <h2 className="text-2xl text-zinc-400 italic">"Think of a <span className="text-white uppercase font-bold tracking-widest">{category}</span>..."</h2>
-                                            <button onClick={startGame} disabled={loading} className="bg-white text-black px-12 py-4 rounded-full font-bold flex items-center space-x-2 mx-auto active:scale-95 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
-                                                <Icons.Zap /> <span>{loading ? "Connecting..." : "Begin Mind Reading"}</span>
-                                            </button>
-                                        </>
-                                    )}
+                                <div className="text-center space-y-10">
+                                    <h1 className="text-4xl font-extralight text-white">I will read your mind.</h1>
+                                    <p className="text-zinc-400 max-w-sm mx-auto">Think of an object. Animal, vegetable, or mineral. I will guess it in 20 questions or less. Try me.</p>
+                                    <button onClick={startGame} className="inline-flex items-center space-x-3 bg-zinc-50 text-black px-10 py-4 rounded-full font-bold transition-transform active:scale-95">
+                                        <Icons.Zap />
+                                        <span>Start Game</span>
+                                    </button>
                                 </div>
                             )}
 
                             {gameState === 'PLAYING' && (
                                 <div className="flex flex-col h-full justify-between">
                                     {showTaunt ? (
-                                        <div className="flex-1 flex flex-col items-center justify-center space-y-6 animate-pulse">
-                                            <div className="text-purple-500 scale-150 mb-4"><Icons.Cpu /></div>
-                                            <h2 className="text-3xl font-black text-center text-purple-400 italic px-4">"{currentSnark}"</h2>
-                                        </div>
-                                    ) : softError ? (
-                                        <div className="flex-1 flex flex-col items-center justify-center space-y-6">
-                                            <div className="text-amber-400 flex justify-center scale-125 mb-2"><Icons.AlertTriangle /></div>
-                                            <h2 className="text-xs font-mono text-red-400 break-words bg-red-950/30 p-4 rounded-xl border border-red-900/50 w-full text-center">{softError}</h2>
-                                            <button onClick={pendingAction} disabled={loading} className="bg-zinc-800 border border-zinc-700 text-white px-8 py-4 rounded-full font-bold w-full hover:bg-zinc-700 active:scale-95 transition-all disabled:opacity-20 uppercase tracking-widest">
-                                                {loading ? "Reconnecting..." : "Try Sending Answer Again"}
-                                            </button>
+                                        <div className="flex-1 flex flex-col items-center justify-center space-y-8">
+                                            <div className="text-purple-500 animate-pulse scale-150 mb-4"><Icons.Cpu /></div>
+                                            <h2 className="text-3xl font-extrabold text-center text-purple-400 italic">"{currentSnark}"</h2>
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="flex-1 flex items-center justify-center">
-                                                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 w-full min-h-[160px] flex items-center justify-center shadow-inner px-4">
-                                                    {loading ? <p className="text-cyan-400 animate-pulse text-lg md:text-xl font-medium tracking-widest uppercase text-center">{loadingText}</p> : <h2 className="text-3xl font-semibold text-center leading-tight tracking-tight">{currentText}?</h2>}
+                                            <div className="space-y-6 flex-1 flex flex-col justify-center">
+                                                <div className="min-h-[140px] flex items-center justify-center bg-zinc-900 rounded-3xl p-6 border border-zinc-800">
+                                                    <h2 className="text-3xl font-semibold text-center text-white">{currentText}</h2>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4 mt-8">
-                                                {['Yes', 'No', 'Sometimes', 'Unknown'].map(btn => (
-                                                    <button key={btn} disabled={loading} onClick={() => handleAnswer(btn)} className="py-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:border-cyan-500 font-bold active:scale-95 transition-all disabled:opacity-20 uppercase tracking-tighter">{btn}</button>
-                                                ))}
+                                            <div className="grid grid-cols-2 gap-4 mt-10">
+                                                <button onClick={() => handleAnswer('Yes')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-cyan-500 text-cyan-400 active:bg-cyan-900/50">
+                                                    <Icons.Zap /><span className="mt-2 font-bold text-white">Yes</span>
+                                                </button>
+                                                <button onClick={() => handleAnswer('No')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-magenta-500 text-pink-500 active:bg-pink-900/50">
+                                                    <Icons.XOctagon /><span className="mt-2 font-bold text-white">No</span>
+                                                </button>
+                                                <button onClick={() => handleAnswer('Sometimes')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-amber-400 text-amber-400 active:bg-amber-900/50">
+                                                    <Icons.Radio /><span className="mt-2 font-bold text-white">Sometimes</span>
+                                                </button>
+                                                <button onClick={() => handleAnswer('Unknown')} className="flex flex-col items-center justify-center py-5 rounded-2xl border border-zinc-700 text-zinc-400 active:bg-zinc-800">
+                                                    <Icons.ShieldAlert /><span className="mt-2 font-bold text-white">Unknown</span>
+                                                </button>
                                             </div>
                                         </>
                                     )}
@@ -281,39 +278,35 @@
                             )}
 
                             {gameState === 'GUESSING' && (
-                                <div className="text-center space-y-10">
-                                    {softError ? (
-                                        <div className="space-y-6">
-                                            <div className="text-amber-400 flex justify-center scale-150"><Icons.AlertTriangle /></div>
-                                            <h2 className="text-xs font-mono text-red-400 break-words bg-red-950/30 p-4 rounded-xl border border-red-900/50">{softError}</h2>
-                                            <button onClick={pendingAction} disabled={loading} className="bg-zinc-800 text-white px-8 py-4 rounded-full font-bold w-full disabled:opacity-20 uppercase">
-                                                {loading ? "Reconnecting..." : "Send Response Again"}
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <p className="text-amber-400 italic font-medium">"{currentSnark}"</p>
-                                            <h1 className="text-4xl font-black leading-tight">Is it a <span className="text-cyan-400 underline decoration-cyan-500/30 underline-offset-8 uppercase tracking-tighter">{currentText}</span>?</h1>
-                                            <div className="space-y-4 pt-4">
-                                                <button onClick={() => setGameState('WON')} className="w-full bg-cyan-500 text-black py-5 rounded-full font-bold text-xl shadow-lg">YES, YOU GOT IT!</button>
-                                                <button disabled={loading} onClick={() => handleAnswer("No, wrong. Continue.")} className="w-full border border-zinc-700 py-4 rounded-full font-bold text-zinc-500 uppercase tracking-tighter disabled:opacity-20">No, keep going</button>
-                                            </div>
-                                        </>
-                                    )}
+                                <div className="flex flex-col h-full justify-center text-center space-y-10">
+                                    <p className="text-amber-300 italic font-bold">"{currentSnark}"</p>
+                                    <h2 className="text-4xl font-extrabold text-white">Is it... <span className="text-cyan-400 underline">{currentText}</span>?</h2>
+                                    <div className="flex flex-col space-y-4 mt-10">
+                                        <button onClick={() => handleGuessResponse(true)} className="px-8 py-4 bg-cyan-500 text-black rounded-full font-bold">Yes, you got it!</button>
+                                        <button onClick={() => handleGuessResponse(false)} className="px-8 py-4 border border-zinc-700 rounded-full text-zinc-300">No, wrong.</button>
+                                    </div>
                                 </div>
                             )}
 
                             {gameState === 'WON' && (
-                                <div className="text-center space-y-10 animate-in zoom-in duration-500">
-                                    <h1 className="text-7xl font-black italic tracking-tighter text-white uppercase leading-none">I Win.</h1>
-                                    <button onClick={() => window.location.reload()} className="bg-white text-black px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Restart System</span></button>
+                                <div className="text-center space-y-10 relative z-10">
+                                    <div className="text-cyan-400 flex justify-center mb-4 scale-150"><Icons.Cpu /></div>
+                                    <h1 className="text-5xl font-extrabold text-white">I win.</h1>
+                                    <p className="text-zinc-300">It only took me {qCount} questions.</p>
+                                    <button onClick={resetGame} className="inline-flex items-center space-x-2 px-8 py-3.5 border border-zinc-800 bg-zinc-900 rounded-full mx-auto font-semibold">
+                                        <Icons.RotateCcw /><span>Play Again</span>
+                                    </button>
                                 </div>
                             )}
 
                             {gameState === 'LOST' && (
-                                <div className="text-center space-y-10">
-                                    <h1 className="text-5xl font-black text-zinc-500 tracking-tight text-white uppercase">You Win.</h1>
-                                    <button onClick={() => window.location.reload()} className="border border-zinc-700 text-zinc-300 px-10 py-3 rounded-full font-bold flex items-center space-x-2 mx-auto"><Icons.RotateCcw /> <span>Try Again</span></button>
+                                <div className="text-center space-y-10 relative z-10">
+                                    <div className="text-pink-500 flex justify-center mb-4 scale-150"><Icons.AlertTriangle /></div>
+                                    <h1 className="text-5xl font-extrabold text-white">You win.</h1>
+                                    <p className="text-zinc-400">Unbelievable. My database has failed me.</p>
+                                    <button onClick={resetGame} className="inline-flex items-center space-x-2 px-8 py-3.5 bg-zinc-50 text-black rounded-full mx-auto font-bold">
+                                        <Icons.RotateCcw /><span>Play Again</span>
+                                    </button>
                                 </div>
                             )}
                         </div>
